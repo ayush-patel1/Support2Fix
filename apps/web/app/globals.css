@@ -1,14 +1,27 @@
 @import "tailwindcss";
 
+/* ----------------------------------------------------------------------
+ * Brand palette (Support2Fix visual identity): near-black ink, off-white
+ * paper, and a single acid-lime accent. `--color-brand*` generate
+ * bg-brand/text-brand/etc. utilities usable anywhere in the app. The lime
+ * matches the investigation console's own `--color-primary-container`
+ * below — same accent, one brand.
+ * -------------------------------------------------------------------- */
+@theme {
+  --color-brand: #cdf200;
+  --color-brand-ink: #0a0a0a;
+  --color-brand-paper: #f2f1ec;
+}
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f2f1ec;
+  --foreground: #0a0a0a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b1120;
-    --foreground: #e2e8f0;
+    --background: #0a0a0a;
+    --foreground: #f2f1ec;
   }
 }
 
@@ -20,4 +33,150 @@ body {
     -apple-system,
     "Segoe UI",
     sans-serif;
+}
+
+/* Subtle technical/blueprint dot grid — used sparingly (homepage hero),
+ * not site-wide, so it reads as a deliberate touch rather than texture. */
+.bg-dot-grid {
+  background-image: radial-gradient(circle, currentcolor 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+/* ----------------------------------------------------------------------
+ * "Investigation console" design tokens — used by app/investigations/[id].
+ * A Material-Design-3-style dark palette + type scale, ported from a UI
+ * mockup into Tailwind v4's CSS-first theme (see globals.css docs). Names
+ * are namespaced enough (on-tertiary-fixed-variant, surface-container-low,
+ * ...) that they won't collide with anything else, so defining them here
+ * (the only file with `@import "tailwindcss"`) rather than a page-scoped
+ * file keeps Tailwind's `@theme` processing simple and reliable.
+ * -------------------------------------------------------------------- */
+@theme {
+  --color-on-error: #690005;
+  --color-on-primary: #2b3400;
+  --color-on-background: #e5e2de;
+  --color-on-tertiary-fixed-variant: #930011;
+  --color-primary: #ffffff;
+  --color-secondary-fixed: #4dffb2;
+  --color-on-error-container: #ffdad6;
+  --color-primary-container: #cdf200;
+  --color-outline: #8f9378;
+  --color-surface-dim: #131311;
+  --color-on-secondary-fixed: #002112;
+  --color-surface-container-low: #1c1c1a;
+  --color-tertiary-container: #ffdad6;
+  --color-surface: #131311;
+  --color-primary-fixed-dim: #b3d400;
+  --color-surface-variant: #353532;
+  --color-on-primary-fixed: #181e00;
+  --color-primary-fixed: #cdf200;
+  --color-inverse-on-surface: #31302e;
+  --color-tertiary: #ffffff;
+  --color-on-tertiary: #680009;
+  --color-on-primary-fixed-variant: #3f4c00;
+  --color-on-surface-variant: #c5c9ac;
+  --color-on-secondary: #003822;
+  --color-on-tertiary-container: #c71421;
+  --color-error-container: #93000a;
+  --color-tertiary-fixed: #ffdad6;
+  --color-surface-container: #20201e;
+  --color-secondary-container: #01e599;
+  --color-on-tertiary-fixed: #410003;
+  --color-on-secondary-container: #00613e;
+  --color-surface-container-highest: #353532;
+  --color-error: #ffb4ab;
+  --color-outline-variant: #454932;
+  --color-inverse-primary: #556500;
+  --color-surface-container-high: #2a2a28;
+  --color-inverse-surface: #e5e2de;
+  --color-on-primary-container: #5a6c00;
+  --color-secondary-fixed-dim: #00e297;
+  --color-surface-tint: #b3d400;
+  --color-on-surface: #e5e2de;
+  --color-tertiary-fixed-dim: #ffb3ad;
+  --color-surface-container-lowest: #0e0e0c;
+  --color-on-secondary-fixed-variant: #005234;
+  --color-surface-bright: #3a3937;
+  --color-secondary: #70ffba;
+  --color-background: #131311;
+
+  --spacing-space-xl: 1.5rem;
+  --spacing-space-md: 0.75rem;
+  --spacing-space-xs: 0.25rem;
+  --spacing-margin-mobile: 0.75rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-margin: 1rem;
+  --spacing-gutter-mobile: 0.5rem;
+  --spacing-gutter: 0.75rem;
+  --spacing-space-lg: 1rem;
+
+  --font-display-lg-mobile: "Geist", sans-serif;
+  --font-body-md: "Geist", sans-serif;
+  --font-label-sm: "JetBrains Mono", monospace;
+  --font-headline-md: "Geist", sans-serif;
+  --font-body-sm: "Geist", sans-serif;
+  --font-label-lg: "JetBrains Mono", monospace;
+  --font-body-lg: "Geist", sans-serif;
+  --font-headline-lg: "Geist", sans-serif;
+  --font-label-md: "JetBrains Mono", monospace;
+  --font-display-lg: "Geist", sans-serif;
+  --font-code-stream: "JetBrains Mono", monospace;
+  --font-headline-sm: "Geist", sans-serif;
+
+  --text-display-lg-mobile: 1.75rem;
+  --text-display-lg-mobile--line-height: 2rem;
+  --text-display-lg-mobile--letter-spacing: -0.02em;
+  --text-display-lg-mobile--font-weight: 600;
+
+  --text-body-md: 0.8125rem;
+  --text-body-md--line-height: 1.25rem;
+  --text-body-md--font-weight: 400;
+
+  --text-label-sm: 0.6875rem;
+  --text-label-sm--line-height: 0.75rem;
+  --text-label-sm--letter-spacing: 0.06em;
+  --text-label-sm--font-weight: 400;
+
+  --text-headline-md: 1.25rem;
+  --text-headline-md--line-height: 1.5rem;
+  --text-headline-md--letter-spacing: -0.015em;
+  --text-headline-md--font-weight: 500;
+
+  --text-body-sm: 0.75rem;
+  --text-body-sm--line-height: 1rem;
+  --text-body-sm--font-weight: 400;
+
+  --text-label-lg: 0.8125rem;
+  --text-label-lg--line-height: 1rem;
+  --text-label-lg--letter-spacing: 0.02em;
+  --text-label-lg--font-weight: 500;
+
+  --text-body-lg: 0.9375rem;
+  --text-body-lg--line-height: 1.375rem;
+  --text-body-lg--font-weight: 400;
+
+  --text-headline-lg: 1.5rem;
+  --text-headline-lg--line-height: 1.75rem;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 600;
+
+  --text-label-md: 0.75rem;
+  --text-label-md--line-height: 0.875rem;
+  --text-label-md--letter-spacing: 0.04em;
+  --text-label-md--font-weight: 400;
+
+  --text-display-lg: 2.25rem;
+  --text-display-lg--line-height: 2.5rem;
+  --text-display-lg--letter-spacing: -0.03em;
+  --text-display-lg--font-weight: 600;
+
+  --text-code-stream: 0.75rem;
+  --text-code-stream--line-height: 1.125rem;
+  --text-code-stream--font-weight: 400;
+
+  --text-headline-sm: 1rem;
+  --text-headline-sm--line-height: 1.25rem;
+  --text-headline-sm--letter-spacing: -0.01em;
+  --text-headline-sm--font-weight: 500;
 }

@@ -1,0 +1,18 @@
+/* Standard Google-provided rule for the Material Symbols variable icon
+ * font — the font file itself loads via the <link> tags in layout.tsx.
+ * Plain CSS (no Tailwind at-rules), so it needs no special build handling.
+ */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
