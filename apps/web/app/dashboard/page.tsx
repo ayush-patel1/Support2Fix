@@ -79,12 +79,16 @@ export default function DashboardPage() {
           <DashboardCard
             title="Tickets"
             description="Create, triage, search and track support tickets."
-            phase="Phase 3"
+            phase="Live"
+            href="/tickets"
+            cta="View tickets"
           />
           <DashboardCard
             title="Customers"
             description="Environments, services, repositories and deployments."
-            phase="Phase 4"
+            phase="Live"
+            href="/customers"
+            cta="View customers"
           />
           <DashboardCard
             title="Investigation console"

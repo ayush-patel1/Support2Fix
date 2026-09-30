@@ -18,7 +18,21 @@ from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
-    """Base class for all ORM models. Alembic's env.py targets this metadata."""
+    """Base class for all ORM models. Alembic's env.py targets this metadata.
+
+    `eager_defaults=True` makes every model fetch server-computed columns
+    (created_at/updated_at's `server_default`/`onupdate=func.now()`) back via
+    `RETURNING` as part of the same INSERT/UPDATE, instead of leaving them
+    marked stale until something reads them. Async sessions can't satisfy a
+    stale-attribute lazy-load implicitly (there's no event loop to hop into
+    from a synchronous attribute access), so without this, serializing a
+    just-updated row — e.g. `TicketPublic.model_validate(ticket)` right
+    after `change_status()` commits — fails with `MissingGreenlet`. Applies
+    to every subclass (a plain class-level dict on a non-polymorphic base is
+    inherited by each mapped subclass's own mapper configuration).
+    """
+
+    __mapper_args__ = {"eager_defaults": True}
 
 
 _engine: AsyncEngine | None = None
