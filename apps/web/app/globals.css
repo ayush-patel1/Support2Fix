@@ -35,12 +35,39 @@ body {
     sans-serif;
 }
 
-/* Subtle technical/blueprint dot grid — used sparingly (homepage hero),
- * not site-wide, so it reads as a deliberate touch rather than texture. */
-.bg-dot-grid {
-  background-image: radial-gradient(circle, currentcolor 1px, transparent 1px);
-  background-size: 24px 24px;
-  color: color-mix(in srgb, var(--foreground) 8%, transparent);
+/* "Blueprint" grid — major + minor gridlines, graph-paper style, matching
+ * the technical/schematic feel of the brand board's "LOGO CONSTRUCTION"
+ * panel. Used sparingly (homepage hero), not site-wide, so it reads as a
+ * deliberate touch rather than texture. Superseded the earlier plain
+ * dot-grid, which read as too sparse/plain against a near-black background.
+ */
+.bg-blueprint-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--foreground) 10%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--foreground) 10%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--foreground) 4%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--foreground) 4%, transparent) 1px,
+      transparent 1px
+    );
+  background-size:
+    192px 192px,
+    192px 192px,
+    24px 24px,
+    24px 24px;
 }
 
 /* ----------------------------------------------------------------------

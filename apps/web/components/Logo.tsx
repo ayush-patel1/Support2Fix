@@ -1,67 +1,42 @@
 /**
- * Support2Fix brand mark, built from the visual identity board (moodboard
- * image, not a source vector file) — two overlapping arrow/flag shapes
- * (ink, then lime, offset down-right) with a small precision-cross accent
- * at the seam, plus the "Support[2]Fix" wordmark with the "2" in lime.
+ * Support2Fix brand mark. `public/support2fix.png` is the real designed
+ * asset (not a recreation) — genuinely transparent (checked its alpha
+ * channel directly; the black you see previewing it elsewhere is just
+ * whatever background is behind it, not baked into the file), so it
+ * composites cleanly on both the light and dark ends of the site's
+ * adaptive theme without any light/dark variant needed.
  *
- * This is a clean SVG *recreation* of that mark, not a pixel trace of the
- * mockup photo — swap `<LogoMark>`'s paths for the real vector export if
- * one exists, and everything downstream (favicon, headers) keeps working.
+ * Natural size is 1372×1147 (≈1.196:1) — `LogoMark` takes `size` as the
+ * rendered width and derives height from that ratio so `next/image`
+ * doesn't squash it.
  */
 
-const BRAND_INK = "#0a0a0a";
-const BRAND_LIME = "#cdf200";
+import Image from "next/image";
+import logoAsset from "@/public/support2fix.png";
 
-export function LogoMark({
-  className,
-  size = 32,
-  ink = BRAND_INK,
-  lime = BRAND_LIME,
-}: {
-  className?: string;
-  size?: number;
-  ink?: string;
-  lime?: string;
-}) {
+const ASPECT_RATIO = 1372 / 1147;
+
+export function LogoMark({ className, size = 32 }: { className?: string; size?: number }) {
   return (
-    <svg
-      viewBox="0 0 44 48"
+    <Image
+      src={logoAsset}
+      alt="Support2Fix"
       width={size}
-      height={size}
+      height={Math.round(size / ASPECT_RATIO)}
       className={className}
-      role="img"
-      aria-label="Support2Fix"
-    >
-      {/* Two overlapping chevron/flag shapes + a precision-cross accent at
-          the seam — both polygons kept fully inside the viewBox (a
-          previous version had points outside it, so the tips were
-          clipped flush against the edges at small render sizes). */}
-      <polygon points="6,8 30,8 22,22 2,22" fill={ink} />
-      <polygon points="18,26 42,26 34,40 14,40" fill={lime} />
-      <g stroke={ink} strokeWidth="2.5" strokeLinecap="round">
-        <line x1="18" y1="17" x2="18" y2="31" />
-        <line x1="12" y1="24" x2="24" y2="24" />
-      </g>
-    </svg>
+      priority
+    />
   );
 }
 
-/** The mark on a rounded lime square — matches the "APP ICON" lockup.
+/** Same mark — kept as a separate name since call sites (e.g. the
 
- * `lime` is overridden to a translucent ink instead of the default solid
- * lime: LogoMark's second shape would otherwise be lime-on-lime against
- * this background and effectively disappear.
+ * investigation console header) already reference `LogoAppIcon`
+ * specifically. The real asset already carries its own glow/backdrop
+ * treatment, so it no longer needs the extra colored-square wrapper an
+ * earlier hand-drawn version used.
  */
-export function LogoAppIcon({ className, size = 32 }: { className?: string; size?: number }) {
-  return (
-    <div
-      className={`flex shrink-0 items-center justify-center rounded-lg bg-brand ${className ?? ""}`}
-      style={{ width: size, height: size }}
-    >
-      <LogoMark size={size * 0.6} lime={`${BRAND_INK}8c`} />
-    </div>
-  );
-}
+export const LogoAppIcon = LogoMark;
 
 export function Wordmark({
   className,
@@ -99,7 +74,12 @@ export function Tagline({ className }: { className?: string }) {
 export function Logo({
   className,
   size = 28,
-  wordmarkClassName,
+  // A prop default, not a hardcoded class concatenated with the caller's
+  // override — text-xl and a caller-supplied text-lg both landing in the
+  // same class string leaves the winner up to Tailwind's stylesheet order,
+  // not which one appears "later" in the string. Exactly the footgun this
+  // project already fixed once in Wordmark's own colorClassName.
+  wordmarkClassName = "text-xl",
 }: {
   className?: string;
   size?: number;
@@ -108,7 +88,7 @@ export function Logo({
   return (
     <span className={`inline-flex items-center gap-2 ${className ?? ""}`}>
       <LogoMark size={size} />
-      <Wordmark className={`text-xl ${wordmarkClassName ?? ""}`} />
+      <Wordmark className={wordmarkClassName} />
     </span>
   );
 }

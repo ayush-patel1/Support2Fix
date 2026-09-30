@@ -35,7 +35,7 @@ export default async function InvestigationPage({ params }: { params: Promise<{ 
       <header className="sticky top-0 left-0 right-0 z-50 h-14 bg-surface-container-lowest border-b border-surface-container-highest">
         <div className="h-14 w-full px-margin flex items-center justify-between gap-space-md">
           <div className="flex items-center gap-space-md min-w-max">
-            <LogoAppIcon size={32} />
+            <LogoAppIcon size={42} />
             <div className="flex items-center gap-space-sm pl-space-xs border-l border-surface-container-highest">
               <Wordmark className="text-lg" colorClassName="text-primary" />
               <span className="font-label-sm text-label-sm text-outline px-space-xs py-0.5 bg-surface-container-low border border-surface-container-high">
