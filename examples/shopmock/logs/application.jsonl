@@ -1,0 +1,4 @@
+{"timestamp": "2026-09-30T14:21:04+00:00", "level": "INFO", "service": "shopmock", "message": "Deployment v2.8.1 rolled out."}
+{"timestamp": "2026-09-30T14:30:11+00:00", "level": "INFO", "service": "shopmock", "message": "Checkout request received: coupon=SAVE100 subtotal_cents=8000"}
+{"timestamp": "2026-09-30T14:30:11+00:00", "level": "INFO", "service": "shopmock", "message": "Order created: total_cents=0 (coupon zeroed the subtotal)"}
+{"timestamp": "2026-09-30T14:32:19+00:00", "level": "ERROR", "service": "shopmock", "message": "PaymentRetryExhausted: PaymentService retry loop exceeded safety threshold: 50 iterations reached without state resolution."}

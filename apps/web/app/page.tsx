@@ -45,17 +45,20 @@ export default function HomePage() {
           Faster diagnosis · Clearer context · Real fixes
         </span>
 
-        <div className="relative flex max-w-2xl flex-col items-center gap-6 text-center">
-          <LogoMark size={160} />
+        <div className="relative flex max-w-2xl flex-col items-center text-center">
+          {/* -mb-4 pulls the wordmark up snug against the logo — with the
+              logo this large, the old uniform gap-6 spacing left it looking
+              disconnected from the text below, floating on its own. */}
+          <LogoMark size={160} className="-mb-4" />
           <div className="flex flex-col items-center gap-2">
             <Wordmark className="text-5xl sm:text-6xl" />
             <Tagline />
           </div>
-          <p className="max-w-lg text-lg text-neutral-600 dark:text-neutral-400">
+          <p className="mt-6 max-w-lg text-lg text-neutral-600 dark:text-neutral-400">
             Turns a customer support issue into an evidence-backed engineering investigation — root
             cause, reproduction, a validated fix, and a human-approved pull request.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/dashboard"
               className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-brand-ink transition hover:brightness-95"
