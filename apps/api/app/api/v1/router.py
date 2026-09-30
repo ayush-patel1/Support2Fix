@@ -1,0 +1,8 @@
+"""Aggregates all /api/v1 routers. Add new resource routers here as phases land."""
+
+from fastapi import APIRouter
+
+from app.api.v1.health import router as health_router
+
+api_v1_router = APIRouter(prefix="/api/v1")
+api_v1_router.include_router(health_router)
