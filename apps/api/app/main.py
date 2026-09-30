@@ -7,11 +7,14 @@ Run locally with:
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_v1_router
 from app.core.config import get_settings
+from app.core.csrf import CsrfHeaderMiddleware
 from app.core.db import dispose_engine, init_engine
+from app.core.errors import AppError
 from app.core.logging import configure_logging
 
 
@@ -30,6 +33,21 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    app.add_middleware(CsrfHeaderMiddleware)
+
+    @app.exception_handler(AppError)
+    async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "type": "about:blank",
+                "title": exc.code,
+                "status": exc.status_code,
+                "detail": exc.message,
+            },
+            media_type="application/problem+json",
+        )
 
     @app.get("/health", tags=["health"])
     async def liveness() -> dict[str, str]:

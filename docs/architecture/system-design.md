@@ -330,7 +330,7 @@ Notes:
 | Prefix | Main operations | Min role |
 |---|---|---|
 | `/api/v1/auth` | login, logout, refresh, me, switch org | public / authenticated |
-| `/api/v1/organizations` | get, update settings, members, invites | ADMIN (read: any member) |
+| `/api/v1/organizations/current` | get, rename, list/add/change-role/remove members (always the caller's active org, never a client-supplied id) | ADMIN (read: any member) |
 | `/api/v1/tickets` | CRUD, filter, search, timeline, status change | SUPPORT (read: VIEWER) |
 | `/api/v1/customers` | CRUD, environments, services, deployments | SUPPORT / ENGINEER (read: VIEWER) |
 | `/api/v1/investigations` | start, get, events (SSE), steps, evidence, claims, cancel | start: SUPPORT; read: VIEWER |

@@ -162,7 +162,7 @@ Redaction is applied (a) before tool results enter LLM prompts or the evidence s
 4. *Optional, Phase 21:* Postgres Row-Level Security as extra defence in depth, adopted only if the review finds a gap that layers 1–3 and the tests don't cover. It adds operational complexity (per-transaction `SET`, migrations, pooling caveats), so it isn't on by default.
 5. Background jobs and tools carry `organization_id` explicitly, checked again on every tool call.
 6. Vector search always filters by `organization_id` (pgvector iterative index scans keep filtered recall acceptable).
-7. Tests: for each resource, a user from org B gets `404` (not `403`, which would leak existence) for org A's IDs.
+7. Tests: for each resource, a user from org B gets `404` (not `403`, which would leak existence) for org A's IDs. Phase 2's organization routes take no organization id at all (they act on the session's active org), so their isolation tests assert that each org sees only its own members, and that switching to an org you don't belong to is refused. The id-based `404` tests start with the first resources addressed by id (tickets, Phase 3).
 
 ## 12. Audit logging
 

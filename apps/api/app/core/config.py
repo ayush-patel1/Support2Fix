@@ -31,6 +31,25 @@ class Settings(BaseSettings):
     llm_mode: Literal["live", "replay", "fake"] = "fake"
     anthropic_api_key: str | None = None
 
+    # Sessions — see security.md §10.
+    session_cookie_name: str = "s2f_session"
+    session_ttl_days: int = 7
+    session_idle_timeout_hours: int = 12
+    # None (the default) means "secure iff environment=production". A
+    # Secure cookie is silently never sent back over plain http:// — not
+    # just by browsers, but by httpx's client too, which is how this got
+    # caught: every authenticated request after login/register came back
+    # 401 in tests, because the session cookie never made it back over the
+    # test transport's http:// base_url. Set this explicitly only to
+    # override that default (e.g. force it on/off regardless of env).
+    session_cookie_secure: bool | None = None
+
+    @property
+    def effective_session_cookie_secure(self) -> bool:
+        if self.session_cookie_secure is not None:
+            return self.session_cookie_secure
+        return self.environment == "production"
+
 
 @lru_cache
 def get_settings() -> Settings:
