@@ -2,7 +2,7 @@
   {
     "service": "shopmock",
     "version": "v2.8.1",
-    "commit_sha": null,
+    "commit_sha": "44f7845",
     "deployed_at": "2026-09-30T14:21:04+00:00",
     "status": "SUCCESS"
   }

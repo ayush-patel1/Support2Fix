@@ -33,6 +33,12 @@ build/
 *.log
 .cache/
 
+# examples/shopmock is a real, separate git repository (Phase 5 — its own
+# commit history is part of the fixture, see examples/shopmock/README.md).
+# Only its .git/ is ignored here; the code/fixtures themselves are tracked
+# normally by this repo.
+examples/shopmock/.git/
+
 # OS / editor
 .DS_Store
 Thumbs.db

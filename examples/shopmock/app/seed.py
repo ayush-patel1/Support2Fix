@@ -59,7 +59,9 @@ def write_fixtures() -> None:
         {
             "service": "shopmock",
             "version": "v2.8.1",
-            "commit_sha": None,  # filled in by scripts/init_shopmock_repo.* after `git commit`
+            # The real "Optimize coupon validation" commit's short hash —
+            # `git log --oneline` in this repo, not a placeholder.
+            "commit_sha": "44f7845",
             "deployed_at": deploy_time.isoformat(),
             "status": "SUCCESS",
         }

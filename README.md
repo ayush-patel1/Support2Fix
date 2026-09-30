@@ -2,7 +2,7 @@
 
 Support2Fix is an AI platform that turns a customer support issue into an evidence-backed engineering investigation. The flow runs: root cause → reproduction → validated fix → human-approved pull request → customer response.
 
-> **Status: Phase 4 (customer context).** Auth/orgs (Phase 2), the support ticket system with its status state machine (Phase 3), and the Customer → Environment → Service → {Repository, Deployment} hierarchy (Phase 4) are implemented and tested against a real Postgres. The investigation console at `/investigations/[id]` is a static design preview, not backed by a real agent — that starts at Phase 9. See the full roadmap in [ADR-001](docs/decisions/001-architecture.md).
+> **Status: Phase 5 (mock production environment).** Auth/orgs (Phase 2), tickets (Phase 3) and customer context (Phase 4) are implemented and tested against a real Postgres. Phase 5 adds `examples/shopmock` — a real, separate, deliberately-buggy target app with its own git history — so the investigation console preview at `/investigations/[id]` (still a static UI, not backed by a real agent) now dramatizes a bug that actually exists and actually reproduces, instead of illustrative text. The agent that would find and fix it starts at Phase 9. See the full roadmap in [ADR-001](docs/decisions/001-architecture.md).
 
 ## Architecture documents
 
@@ -21,6 +21,9 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · FastAPI · Pydantic v2
 apps/
   api/   FastAPI backend (also the worker / tools / sandbox-runner entrypoints, added in later phases)
   web/   Next.js frontend
+examples/
+  shopmock/   Phase 5's mock target app — a real bug for Support2Fix to eventually
+              investigate, not part of the platform. Its own git repo; see its README.
 docs/    architecture, decisions
 infrastructure/docker/   Dockerfiles used by docker-compose.yml
 ```
