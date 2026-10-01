@@ -4,6 +4,10 @@
 #
 # web (3000) -> api (8000) -> postgres (5432). The browser only ever talks
 # to `web`; `api` is exposed on the host too, for convenience (curl, docs).
+# tools (8100) is the Phase 7 MCP server — same image/codebase as `api`,
+# just a different start command (system-design.md §2); the worker (Phase
+# 9+) will be its real client, so it isn't on the host port mapping by
+# default, only reachable from other containers on the compose network.
 name: support2fix
 
 services:
@@ -32,6 +36,20 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-support2fix}:${POSTGRES_PASSWORD:-support2fix}@postgres:5432/${POSTGRES_DB:-support2fix}
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app
+
+  tools:
+    build:
+      context: ./apps/api
+      dockerfile: ../../infrastructure/docker/api.Dockerfile
+    command: ["uvicorn", "app.mcp.app:app", "--host", "0.0.0.0", "--port", "8100", "--reload"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-support2fix}:${POSTGRES_PASSWORD:-support2fix}@postgres:5432/${POSTGRES_DB:-support2fix}
     depends_on:
       postgres:
         condition: service_healthy

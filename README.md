@@ -2,7 +2,7 @@
 
 Support2Fix is an AI platform that turns a customer support issue into an evidence-backed engineering investigation. The flow runs: root cause → reproduction → validated fix → human-approved pull request → customer response.
 
-> **Status: Phase 6 (integration layer).** Auth/orgs (Phase 2), tickets (Phase 3) and customer context (Phase 4) are implemented and tested against a real Postgres. Phase 5 added `examples/shopmock` — a real, separate, deliberately-buggy target app with its own git history — so the investigation console preview at `/investigations/[id]` (still a static UI, not backed by a real agent) dramatizes a bug that actually exists and actually reproduces. Phase 6 adds the integration layer: five vendor-neutral interfaces (`CodeHost`, `LogSource`, `DataSource`, `DeploymentSource`, `SupportSource`) from system-design.md §8, a "local" adapter for each backed by real `git`/files/a read-only Postgres role/the platform's own ticket system — and the `integrations` table and API an organization uses to configure them. The agent that would actually call these tools starts at Phase 9. See the full roadmap in [ADR-001](docs/decisions/001-architecture.md).
+> **Status: Phase 7 (MCP tool servers).** Auth/orgs (Phase 2), tickets (Phase 3) and customer context (Phase 4) are implemented and tested against a real Postgres. Phase 5 added `examples/shopmock` — a real, separate, deliberately-buggy target app with its own git history — so the investigation console preview at `/investigations/[id]` (still a static UI, not backed by a real agent) dramatizes a bug that actually exists and actually reproduces. Phase 6 added the integration layer: five vendor-neutral interfaces (`CodeHost`, `LogSource`, `DataSource`, `DeploymentSource`, `SupportSource`) from system-design.md §8, a "local" adapter for each, and the `integrations` table/API an organization uses to configure them. Phase 7 wraps those same five interfaces as MCP tools, served over streamable HTTP by a new `tools` process (agent-architecture.md §5) — the worker (Phase 9+) is the intended client, reaching them through a ToolGateway that doesn't exist yet (Phase 8), so for now every tool call carries its own `organization_id`/`integration_id` rather than having them injected from a trusted investigation context. See the full roadmap in [ADR-001](docs/decisions/001-architecture.md).
 
 ## Architecture documents
 
@@ -19,7 +19,7 @@ Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · FastAPI · Pydantic v2
 
 ```text
 apps/
-  api/   FastAPI backend (also the worker / tools / sandbox-runner entrypoints, added in later phases)
+  api/   FastAPI backend — also `tools` (the Phase 7 MCP server, app/mcp/) and the worker / sandbox-runner entrypoints added in later phases
   web/   Next.js frontend
 examples/
   shopmock/   Phase 5's mock target app — a real bug for Support2Fix to eventually
@@ -167,6 +167,14 @@ An `Integration` row is `(kind, provider, name, config)` — `kind` is one of th
 
 The local adapters (`app/integrations/local/`) are verified against real data, not mocks: `LocalGitCodeHost` against shopmock's actual 5-commit history (via `git` subprocess calls), `LocalFileLogSource` against its real `logs/application.jsonl`, `LocalFileDeploymentSource` against its real `data/deployments.json`, `LocalPostgresDataSource` against a dedicated `shopmock_readonly` Postgres role (`default_transaction_read_only = on` — the database itself rejects a write, independent of the app-level SELECT/WITH check `run_readonly_query` also does), and `LocalTicketSupportSource` against the platform's own seeded ticket/customer rows.
 
+### MCP tool servers (Phase 7)
+
+`apps/api/app/mcp/` is the `tools` runtime unit (system-design.md §2): the same codebase/image as `api`, started with `uvicorn app.mcp.app:app --port 8100` instead. It's an MCP server (official Python SDK, streamable HTTP, 2026-07-28 core) exposing one tool per adapter method from Phase 6 — `code.*`, `logs.*`, `data.*`, `deploy.*`, `support.*` (16 tools in total) — each taking `organization_id`/`integration_id` and re-deriving the real `Integration` row from the database on every call, so it never just trusts a caller's claim about which org or kind an integration belongs to. A request must carry `Authorization: Bearer $MCP_SERVICE_TOKEN` (a static shared secret standing in for a real short-lived token until there's an issuer to rotate one).
+
+A failure an adapter already documents (not found, a bad git/SQL command, `create_pull_request`'s "not implemented locally") reaches the caller as a normal tool error (`isError: true` with the real message); anything else is treated as a crash and withholds its detail, per the SDK's own `ToolError`/`UnexpectedToolError` split.
+
+There is no ToolGateway yet (Phase 8) and no worker to call these tools for real (Phase 9+) — this phase is the server side only, verified with its own `ClientSession` against real shopmock data (the actual 5-commit git history, the actual `shopmock_readonly`-equivalent Postgres introspection, real log/deployment files) and a pytest suite (`app/tests/test_mcp.py`) covering tool listing, tenant/kind isolation, and the service-token boundary.
+
 ## Frontend pages
 
 `/tickets`, `/tickets/[id]`, `/customers`, `/customers/[id]`, `/customers/[id]/environments/[environmentId]` (the environment overview) — all linked from the dashboard.
@@ -194,7 +202,7 @@ npm run format      # prettier --check
 npm run build       # production build
 ```
 
-All of the above are green as of Phase 6: 47 API tests against a real Postgres, 3 web tests.
+All of the above are green as of Phase 7: 55 API tests against a real Postgres, 3 web tests.
 
 ## Environment variables
 

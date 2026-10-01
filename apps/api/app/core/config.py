@@ -50,6 +50,12 @@ class Settings(BaseSettings):
             return self.session_cookie_secure
         return self.environment == "production"
 
+    # `tools` (Phase 7, agent-architecture.md §5) — the MCP server process.
+    # The worker authenticates to it with this shared secret, standing in
+    # for the "short-lived service token" the doc describes until there's a
+    # real token issuer to rotate one (a later infra phase).
+    mcp_service_token: str = "dev-local-service-token"
+
 
 @lru_cache
 def get_settings() -> Settings:
