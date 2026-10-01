@@ -48,3 +48,8 @@ class ForbiddenError(AppError):
 class NoActiveOrganizationError(AppError):
     status_code = 409
     code = "no_active_organization"
+
+
+class InvalidConfigError(AppError):
+    status_code = 400
+    code = "invalid_config"

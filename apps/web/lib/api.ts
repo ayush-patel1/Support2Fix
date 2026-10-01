@@ -57,6 +57,48 @@ export function getHealth(): Promise<HealthStatus> {
   return apiFetch<HealthStatus>("/v1/health");
 }
 
+// --- Auth & organizations (Phase 2) ------------------------------------
+
+export type Role = "ADMIN" | "ENGINEER" | "SUPPORT" | "VIEWER";
+
+export interface User {
+  id: string;
+  email: string;
+  is_active: boolean;
+}
+
+export interface Membership {
+  organization_id: string;
+  organization_name: string;
+  role: Role;
+}
+
+export interface MeResponse {
+  user: User;
+  memberships: Membership[];
+  active_organization_id: string | null;
+}
+
+export function register(data: {
+  email: string;
+  password: string;
+  organization_name: string;
+}): Promise<User> {
+  return apiFetch<User>("/v1/auth/register", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function login(data: { email: string; password: string }): Promise<User> {
+  return apiFetch<User>("/v1/auth/login", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function logout(): Promise<void> {
+  await apiFetch<void>("/v1/auth/logout", { method: "POST" });
+}
+
+export function getMe(): Promise<MeResponse> {
+  return apiFetch<MeResponse>("/v1/auth/me");
+}
+
 // --- Tickets (Phase 3) ------------------------------------------------
 
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";

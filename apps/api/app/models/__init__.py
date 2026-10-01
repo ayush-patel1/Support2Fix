@@ -13,6 +13,7 @@ from app.models.customer import (
     RepositoryProvider,
     Service,
 )
+from app.models.integration import Integration, IntegrationKind, IntegrationProvider
 from app.models.membership import Membership, Role
 from app.models.organization import Organization
 from app.models.session import Session
@@ -26,6 +27,9 @@ __all__ = [
     "CustomerTier",
     "Deployment",
     "DeploymentStatus",
+    "Integration",
+    "IntegrationKind",
+    "IntegrationProvider",
     "Membership",
     "Organization",
     "RepositoryProvider",

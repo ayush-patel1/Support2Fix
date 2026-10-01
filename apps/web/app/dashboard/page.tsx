@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { HealthBadge } from "@/components/HealthBadge";
 import { TopNav } from "@/components/TopNav";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 function PhaseBadge({ children }: { children: string }) {
   return (
@@ -62,9 +65,12 @@ function DashboardCard({
 }
 
 export default function DashboardPage() {
+  const { me, loading } = useAuthGuard();
+  if (loading || !me) return null;
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <TopNav active="/dashboard" />
+      <TopNav active="/dashboard" userEmail={me.user.email} />
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-4">

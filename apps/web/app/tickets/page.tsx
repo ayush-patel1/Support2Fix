@@ -14,6 +14,7 @@ import {
   type TicketPriority,
   type TicketStatus,
 } from "@/lib/api";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 const STATUSES: TicketStatus[] = [
   "OPEN",
@@ -27,6 +28,7 @@ const STATUSES: TicketStatus[] = [
 const PRIORITIES: TicketPriority[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 export default function TicketsPage() {
+  const { me, loading: authLoading } = useAuthGuard();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [status, setStatus] = useState<TicketStatus | "">("");
@@ -77,9 +79,11 @@ export default function TicketsPage() {
 
   const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8);
 
+  if (authLoading || !me) return null;
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <TopNav active="/tickets" />
+      <TopNav active="/tickets" userEmail={me.user.email} />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold">Tickets</h1>

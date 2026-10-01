@@ -2,7 +2,7 @@
 
 Support2Fix is an AI platform that turns a customer support issue into an evidence-backed engineering investigation. The flow runs: root cause → reproduction → validated fix → human-approved pull request → customer response.
 
-> **Status: Phase 5 (mock production environment).** Auth/orgs (Phase 2), tickets (Phase 3) and customer context (Phase 4) are implemented and tested against a real Postgres. Phase 5 adds `examples/shopmock` — a real, separate, deliberately-buggy target app with its own git history — so the investigation console preview at `/investigations/[id]` (still a static UI, not backed by a real agent) now dramatizes a bug that actually exists and actually reproduces, instead of illustrative text. The agent that would find and fix it starts at Phase 9. See the full roadmap in [ADR-001](docs/decisions/001-architecture.md).
+> **Status: Phase 6 (integration layer).** Auth/orgs (Phase 2), tickets (Phase 3) and customer context (Phase 4) are implemented and tested against a real Postgres. Phase 5 added `examples/shopmock` — a real, separate, deliberately-buggy target app with its own git history — so the investigation console preview at `/investigations/[id]` (still a static UI, not backed by a real agent) dramatizes a bug that actually exists and actually reproduces. Phase 6 adds the integration layer: five vendor-neutral interfaces (`CodeHost`, `LogSource`, `DataSource`, `DeploymentSource`, `SupportSource`) from system-design.md §8, a "local" adapter for each backed by real `git`/files/a read-only Postgres role/the platform's own ticket system — and the `integrations` table and API an organization uses to configure them. The agent that would actually call these tools starts at Phase 9. See the full roadmap in [ADR-001](docs/decisions/001-architecture.md).
 
 ## Architecture documents
 
@@ -154,6 +154,19 @@ Customer → Environment → Service → {Repository, Deployment}. Every child t
 | `POST /api/v1/services/{service_id}/repositories` | SUPPORT+ | Flattened here rather than nested further |
 | `POST /api/v1/services/{service_id}/deployments` | SUPPORT+ | |
 
+### Integrations (Phase 6)
+
+An `Integration` row is `(kind, provider, name, config)` — `kind` is one of the five interfaces in [system-design.md §8](docs/architecture/system-design.md); `provider` is `LOCAL` for now (the only adapters built so far — real vendor adapters like GitHub land from Phase 15 onward). `config` holds whatever that adapter needs to connect (a filesystem path, a database URL); it never holds a secret — `secret_ref` is reserved for that, for providers that need one. Config is validated on create/update by actually building the adapter (`app/integrations/registry.py`), so a bad path or an unsupported provider is a `400 invalid_config`, not a surprise at first use.
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `POST /api/v1/integrations` | ADMIN | |
+| `GET /api/v1/integrations` | ADMIN | Optional `?kind=` filter |
+| `GET /api/v1/integrations/{id}` / `PATCH` / `DELETE` | ADMIN | |
+| `POST /api/v1/integrations/{id}/test` | ADMIN | Builds the real adapter and makes one real call (e.g. `list_commits`, `get_schema`) — `{"ok": false, "detail": "..."}` on failure, never a 500 |
+
+The local adapters (`app/integrations/local/`) are verified against real data, not mocks: `LocalGitCodeHost` against shopmock's actual 5-commit history (via `git` subprocess calls), `LocalFileLogSource` against its real `logs/application.jsonl`, `LocalFileDeploymentSource` against its real `data/deployments.json`, `LocalPostgresDataSource` against a dedicated `shopmock_readonly` Postgres role (`default_transaction_read_only = on` — the database itself rejects a write, independent of the app-level SELECT/WITH check `run_readonly_query` also does), and `LocalTicketSupportSource` against the platform's own seeded ticket/customer rows.
+
 ## Frontend pages
 
 `/tickets`, `/tickets/[id]`, `/customers`, `/customers/[id]`, `/customers/[id]/environments/[environmentId]` (the environment overview) — all linked from the dashboard.
@@ -181,7 +194,7 @@ npm run format      # prettier --check
 npm run build       # production build
 ```
 
-All of the above are green as of Phase 4: 38 API tests against a real Postgres, 3 web tests.
+All of the above are green as of Phase 6: 47 API tests against a real Postgres, 3 web tests.
 
 ## Environment variables
 

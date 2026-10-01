@@ -10,8 +10,10 @@ import {
   createCustomer,
   listCustomers,
 } from "@/lib/api";
+import { useAuthGuard } from "@/lib/useAuthGuard";
 
 export default function CustomersPage() {
+  const { me, loading: authLoading } = useAuthGuard();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +53,11 @@ export default function CustomersPage() {
     }
   }
 
+  if (authLoading || !me) return null;
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <TopNav active="/customers" />
+      <TopNav active="/customers" userEmail={me.user.email} />
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-10">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold">Customers</h1>
