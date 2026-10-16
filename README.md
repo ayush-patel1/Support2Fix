@@ -2,7 +2,7 @@
 
 Support2Fix is an AI platform that turns a customer support issue into an evidence-backed engineering investigation. The flow runs: root cause → reproduction → validated fix → human-approved pull request → customer response.
 
-> **Status: Phase 8 (ToolGateway and permissions).** Phases 2–7 provide authentication, tickets, customer context, the local `shopmock` target, integration adapters and MCP tool servers. Phase 8 adds the in-process ToolGateway: it enforces server-side tool policy, injects tenant scope, redacts and bounds results, and records immutable tool-call and evidence records. The worker and investigation workflow (Phase 9+) are not implemented yet, so `/investigations/[id]` remains a clearly labelled static design preview rather than a live investigation. See the full roadmap in [system-design.md §12](docs/architecture/system-design.md#12-phase-roadmap-and-dependency-order) and [ADR-001](docs/decisions/001-architecture.md).
+> **Status: working local evidence-investigation vertical slice.** The app includes authentication and tenant isolation (Phase 2), tickets and customer context (Phases 3–4), local integration adapters (Phase 6), MCP tools and a policy-enforcing ToolGateway (Phases 7–8), and a persistent investigation queue, worker, evidence collection, and live investigation view (a useful subset of Phase 9–10). The collector returns a source-backed **hypothesis**, never a confirmed root cause. Later roadmap features—including a LangGraph/LLM reasoning agent, isolated reproduction, patch generation/validation, approvals and PR creation, RAG, and production hardening—are not implemented. See [system-design.md §12](docs/architecture/system-design.md#12-phase-roadmap-and-dependency-order).
 
 ## Architecture documents
 
@@ -42,6 +42,29 @@ docker compose up --build
 - Frontend: http://localhost:3000
 - API: http://localhost:8000 (docs at `/docs`)
 - Postgres: `localhost:5432` (user/password/db: `support2fix` by default)
+
+#### Run the local investigation demo
+
+In a second terminal, seed a demo organization, account, customer, checkout
+ticket, and local shopmock integrations. Choose a local-only password of at
+least 12 characters:
+
+```bash
+DEMO_PASSWORD='replace-with-a-local-password' \
+  docker compose run --rm -e DEMO_PASSWORD worker python -m app.demo_seed
+```
+
+The demo login is `demo@support2fix.local` and the password is the value
+you supplied. Open `/login`, then select **Tickets**, open the seeded
+checkout ticket, and choose **Start investigation**. The API queues the
+request in Postgres; the worker calls the configured local log, deployment,
+and source-code tools through the ToolGateway. The investigation page polls
+for progress and displays stored, redacted, hashed evidence and any
+source-matched hypothesis. The worker does not execute customer code or
+create a patch. The first `docker compose up --build` applies migrations.
+
+The demo account is created only by this explicit command and only outside
+production. Keep the password local; do not use it for a real account.
 
 ### Option B — Run the apps directly (no Docker)
 
