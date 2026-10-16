@@ -21,7 +21,7 @@ from app.models.investigation import (
     InvestigationStatus,
 )
 from app.models.membership import Membership, Role
-from app.models.ticket import Ticket
+from app.models.ticket import Ticket, TicketEvent, TicketEventType, TicketStatus
 
 _READ_TOOLS = frozenset(
     {
@@ -42,8 +42,11 @@ _READ_TOOLS = frozenset(
     }
 )
 _ERROR_TOKEN = re.compile(
-    r"\b[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception|Failure|Failed|Exhausted|Timeout)\b"
+    r"\b[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception|Failure|Failed|Exhausted|Timeout)\b",
+    re.IGNORECASE,
 )
+_ERROR_CODE = re.compile(r"\b[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+\b")
+_MAX_CODE_SEARCHES = 5
 
 
 def _unwrap_result(data: Any) -> Any:
@@ -73,33 +76,47 @@ def _error_messages(log_entries: list[Any]) -> list[str]:
     return messages
 
 
+def _error_signatures(log_entries: list[Any], *, limit: int = _MAX_CODE_SEARCHES) -> list[str]:
+    signatures: list[str] = []
+    seen: set[str] = set()
+    for message in _error_messages(log_entries):
+        for pattern in (_ERROR_TOKEN, _ERROR_CODE):
+            for match in pattern.finditer(message):
+                signature = match.group()
+                if signature not in seen:
+                    seen.add(signature)
+                    signatures.append(signature)
+                    if len(signatures) >= limit:
+                        return signatures
+    return signatures
+
+
 def _candidate(
-    log_entries: list[Any], code_matches: list[Any], log_evidence_id: uuid.UUID | None,
+    signature: str,
+    code_matches: list[Any],
+    log_evidence_id: uuid.UUID | None,
     code_evidence_id: uuid.UUID | None,
 ) -> dict[str, Any] | None:
-    messages = _error_messages(log_entries)
     matches = [line for line in code_matches if isinstance(line, dict)]
-    for message in messages:
-        for signature in _ERROR_TOKEN.findall(message):
-            for match in matches:
-                source_line = match.get("line")
-                if isinstance(source_line, str) and signature in source_line:
-                    return {
-                        "classification": "HYPOTHESIS",
-                        "summary": (
-                            f"The error signature {signature!r} appears in both an error log "
-                            f"and source code ({match.get('path')}:{match.get('line_number')}). "
-                            "This is a candidate code path, not a confirmed root cause."
-                        ),
-                        "signature": signature,
-                        "path": match.get("path"),
-                        "line_number": match.get("line_number"),
-                        "evidence_ids": [
-                            str(value)
-                            for value in (log_evidence_id, code_evidence_id)
-                            if value is not None
-                        ],
-                    }
+    for match in matches:
+        source_line = match.get("line")
+        if isinstance(source_line, str) and signature in source_line:
+            return {
+                "classification": "HYPOTHESIS",
+                "summary": (
+                    f"The error signature {signature!r} appears in both an error log "
+                    f"and source code ({match.get('path')}:{match.get('line_number')}). "
+                    "This is a candidate code path, not a confirmed root cause."
+                ),
+                "signature": signature,
+                "path": match.get("path"),
+                "line_number": match.get("line_number"),
+                "evidence_ids": [
+                    str(value)
+                    for value in (log_evidence_id, code_evidence_id)
+                    if value is not None
+                ],
+            }
     return None
 
 
@@ -211,36 +228,53 @@ async def collect_investigation(
                     await event_db.commit()
 
         log_entries = _as_list(results["logs"].data) if "logs" in results else []
-        error_signatures = [
-            signature
-            for message in _error_messages(log_entries)
-            for signature in _ERROR_TOKEN.findall(message)
-        ]
-        if IntegrationKind.CODE_HOST in integration_ids and error_signatures:
-            signature = error_signatures[0]
-            code_result = await gateway.call_tool(
-                "code.search_code", {"query": signature, "limit": 20}, context
-            )
-            results["code_search"] = code_result
-            if code_result.decision.value == "ALLOW" and code_result.evidence_id is not None:
-                evidence_ids["code_search"] = code_result.evidence_id
-            else:
-                evidence_gaps.append(f"code.search_code: {code_result.reason}")
+        candidate = None
+        code_evidence_ids: list[uuid.UUID] = []
+        if IntegrationKind.CODE_HOST in integration_ids:
+            for signature in _error_signatures(log_entries):
+                code_result = await gateway.call_tool(
+                    "code.search_code", {"query": signature, "limit": 20}, context
+                )
+                if (
+                    code_result.decision.value != "ALLOW"
+                    or code_result.evidence_id is None
+                ):
+                    evidence_gaps.append(f"code.search_code ({signature}): {code_result.reason}")
+                    continue
 
-        code_matches = (
-            _as_list(results["code_search"].data) if "code_search" in results else []
-        )
-        candidate = _candidate(
-            log_entries,
-            code_matches,
-            evidence_ids.get("logs"),
-            evidence_ids.get("code_search"),
-        )
+                code_evidence_ids.append(code_result.evidence_id)
+                code_matches = _as_list(code_result.data)
+                async with session_factory() as event_db:
+                    current = await event_db.get(Investigation, investigation.id)
+                    if current is not None:
+                        event_db.add(
+                            _event(
+                                current,
+                                InvestigationEventType.TOOL_COMPLETED,
+                                f"Collected {len(code_matches)} item(s) from code.search_code.",
+                                {
+                                    "tool_name": "code.search_code",
+                                    "query": signature,
+                                    "evidence_id": str(code_result.evidence_id),
+                                },
+                            )
+                        )
+                        await event_db.commit()
 
-        configured_count = len(calls)
+                candidate = _candidate(
+                    signature,
+                    code_matches,
+                    evidence_ids.get("logs"),
+                    code_result.evidence_id,
+                )
+                if candidate is not None:
+                    break
+
+        total_evidence_count = len(evidence_ids) + len(code_evidence_ids)
+        configured_count = len(calls) + int(bool(code_evidence_ids))
         summary_parts = [
             f"Evidence collection completed for ticket {ticket.id}.",
-            f"Collected {len(evidence_ids)} evidence item(s) across "
+            f"Collected {total_evidence_count} evidence item(s) across "
             f"{configured_count} configured source(s).",
         ]
         if candidate is not None:
@@ -269,12 +303,36 @@ async def collect_investigation(
                     InvestigationEventType.COMPLETED,
                     "Evidence collection completed.",
                     {
-                        "evidence_count": len(evidence_ids),
+                        "evidence_count": total_evidence_count,
                         "evidence_gaps": len(evidence_gaps),
                         "has_hypothesis": candidate is not None,
                     },
                 )
             )
+            current_ticket = (
+                await finish_db.execute(
+                    select(Ticket)
+                    .where(
+                        Ticket.id == current.ticket_id,
+                        Ticket.organization_id == current.organization_id,
+                    )
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if current_ticket is not None and current_ticket.status == TicketStatus.INVESTIGATING:
+                current_ticket.status = TicketStatus.ESCALATED
+                finish_db.add(
+                    TicketEvent(
+                        organization_id=current_ticket.organization_id,
+                        ticket_id=current_ticket.id,
+                        actor_user_id=None,
+                        type=TicketEventType.STATUS_CHANGED,
+                        payload={
+                            "from": TicketStatus.INVESTIGATING.value,
+                            "to": TicketStatus.ESCALATED.value,
+                        },
+                    )
+                )
             job = (
                 await finish_db.execute(
                     select(InvestigationJob).where(

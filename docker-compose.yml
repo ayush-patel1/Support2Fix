@@ -54,6 +54,7 @@ services:
       retries: 10
     volumes:
       - ./apps/api:/app
+      - ${REPOSITORIES_PATH:-.}:/workspace:ro
 
   tools:
     build:
@@ -79,6 +80,7 @@ services:
       retries: 10
     volumes:
       - ./apps/api:/app
+      - ${REPOSITORIES_PATH:-.}:/workspace:ro
 
   worker:
     build:
@@ -100,7 +102,7 @@ services:
         condition: service_healthy
     volumes:
       - ./apps/api:/app
-      - ./:/workspace:ro
+      - ${REPOSITORIES_PATH:-.}:/workspace:ro
 
   web:
     build:

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { HealthBadge } from "@/components/HealthBadge";
 import { TopNav } from "@/components/TopNav";
+import { isActiveOrganizationAdmin } from "@/lib/api";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 
 function PhaseBadge({ children }: { children: string }) {
@@ -67,6 +68,7 @@ function DashboardCard({
 export default function DashboardPage() {
   const { me, loading } = useAuthGuard();
   if (loading || !me) return null;
+  const isAdmin = isActiveOrganizationAdmin(me);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -96,6 +98,15 @@ export default function DashboardPage() {
             href="/customers"
             cta="View customers"
           />
+          {isAdmin && (
+            <DashboardCard
+              title="Repository integrations"
+              description="Connect local Git repositories used to collect source-code evidence."
+              phase="Live"
+              href="/integrations"
+              cta="Manage repositories"
+            />
+          )}
           <DashboardCard
             title="Evidence investigations"
             description="Queue scoped log, deployment, and source-code collection from a support ticket."

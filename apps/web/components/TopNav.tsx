@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/tickets", label: "Tickets" },
   { href: "/customers", label: "Customers" },
+  { href: "/integrations", label: "Integrations" },
 ] as const;
 
 export function TopNav({ active, userEmail }: { active?: string; userEmail?: string }) {

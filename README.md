@@ -60,8 +60,12 @@ checkout ticket, and choose **Start investigation**. The API queues the
 request in Postgres; the worker calls the configured local log, deployment,
 and source-code tools through the ToolGateway. The investigation page polls
 for progress and displays stored, redacted, hashed evidence and any
-source-matched hypothesis. The worker does not execute customer code or
-create a patch. The first `docker compose up --build` applies migrations.
+source-matched hypothesis. Code searches use up to five distinct error
+signatures or structured error codes from the collected logs, rather than a
+demo-specific symptom. When evidence collection finishes, the ticket moves
+to **ESCALATED** for human review; a hypothesis is not a confirmed root cause.
+The worker does not execute customer code or create a patch.
+The first `docker compose up --build` applies migrations.
 
 The demo account is created only by this explicit command and only outside
 production. Keep the password local; do not use it for a real account.
@@ -180,6 +184,8 @@ Customer → Environment → Service → {Repository, Deployment}. Every child t
 ### Integrations (Phase 6)
 
 An `Integration` row is `(kind, provider, name, config)` — `kind` is one of the five interfaces in [system-design.md §8](docs/architecture/system-design.md); `provider` is `LOCAL` for now (the only adapters built so far — real vendor adapters like GitHub land from Phase 15 onward). `config` holds whatever that adapter needs to connect (a filesystem path, a database URL); it never holds a secret — `secret_ref` is reserved for that, for providers that need one. Config is validated on create/update by actually building the adapter (`app/integrations/registry.py`), so a bad path or an unsupported provider is a `400 invalid_config`, not a surprise at first use.
+
+Organization admins can manage local Git integrations in the **Integrations** page. Enter an absolute path to a Git working tree, test the connection, and disconnect it from that page. With Docker Compose, `REPOSITORIES_PATH` in `.env` selects the host directory mounted read-only at `/workspace` in the API, tools, and worker containers. For example, the default `REPOSITORIES_PATH=.` lets you connect the demo repo at `/workspace/examples/shopmock`; to connect repos elsewhere, set it to their shared parent directory and use the matching `/workspace/<repo>` path in the UI. When running the apps directly on the host, use a path visible to all three processes. This currently connects checked-out local repositories only; hosted GitHub/GitLab URLs and OAuth are not implemented.
 
 | Endpoint | Who | Notes |
 |---|---|---|

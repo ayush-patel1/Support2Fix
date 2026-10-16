@@ -79,6 +79,13 @@ export interface MeResponse {
   active_organization_id: string | null;
 }
 
+export function isActiveOrganizationAdmin(me: MeResponse): boolean {
+  return me.memberships.some(
+    (membership) =>
+      membership.organization_id === me.active_organization_id && membership.role === "ADMIN",
+  );
+}
+
 export function register(data: {
   email: string;
   password: string;
@@ -257,6 +264,50 @@ export function getInvestigation(id: string): Promise<InvestigationDetail> {
 
 export function listInvestigationEvents(id: string): Promise<InvestigationEvent[]> {
   return apiFetch<InvestigationEvent[]>(`/v1/investigations/${id}/events`);
+}
+
+// --- Integrations -----------------------------------------------------
+
+export type IntegrationKind =
+  "CODE_HOST" | "LOG_SOURCE" | "DATA_SOURCE" | "DEPLOYMENT_SOURCE" | "SUPPORT_SOURCE";
+
+export interface Integration {
+  id: string;
+  kind: IntegrationKind;
+  provider: "LOCAL";
+  name: string;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrationTestResult {
+  ok: boolean;
+  detail: string;
+}
+
+export function listIntegrations(kind?: IntegrationKind): Promise<Integration[]> {
+  return apiFetch<Integration[]>(`/v1/integrations${query({ kind })}`);
+}
+
+export function createIntegration(data: {
+  kind: IntegrationKind;
+  provider?: Integration["provider"];
+  name: string;
+  config: Record<string, unknown>;
+}): Promise<Integration> {
+  return apiFetch<Integration>("/v1/integrations", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function testIntegration(id: string): Promise<IntegrationTestResult> {
+  return apiFetch<IntegrationTestResult>(`/v1/integrations/${id}/test`, { method: "POST" });
+}
+
+export function deleteIntegration(id: string): Promise<void> {
+  return apiFetch<void>(`/v1/integrations/${id}`, { method: "DELETE" });
 }
 
 // --- Customer context (Phase 4) ---------------------------------------

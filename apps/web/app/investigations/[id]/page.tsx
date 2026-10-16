@@ -126,6 +126,12 @@ export default function InvestigationPage() {
                 {investigation.summary ??
                   "The worker is collecting tenant-scoped evidence. This page refreshes automatically."}
               </p>
+              {investigation.status === "COMPLETED" && (
+                <p className="mt-3 text-sm text-amber-800 dark:text-amber-200">
+                  Evidence review is complete. The ticket is escalated for human review; the
+                  hypothesis is not a confirmed root cause.
+                </p>
+              )}
               <p className="mt-3 text-xs text-neutral-500">
                 Started {formatTime(investigation.created_at)}
                 {investigation.completed_at &&

@@ -1,7 +1,7 @@
 import uuid
 
 from app.integrations.local.code_host import LocalGitCodeHost
-from app.worker.investigations import _candidate
+from app.worker.investigations import _candidate, _error_signatures
 
 
 def test_hypothesis_requires_same_signature_in_logs_and_source():
@@ -9,7 +9,7 @@ def test_hypothesis_requires_same_signature_in_logs_and_source():
     code_id = uuid.uuid4()
 
     result = _candidate(
-        [{"level": "ERROR", "message": "PaymentRetryExhausted: retries reached"}],
+        "PaymentRetryExhausted",
         [
             {
                 "path": "app/payment.py",
@@ -30,13 +30,49 @@ def test_hypothesis_requires_same_signature_in_logs_and_source():
 
 def test_unrelated_code_does_not_become_a_root_cause_hypothesis():
     result = _candidate(
-        [{"level": "ERROR", "message": "PaymentRetryExhausted: retries reached"}],
+        "PaymentRetryExhausted",
         [{"path": "app/payment.py", "line_number": 1, "line": "return None"}],
         uuid.uuid4(),
         uuid.uuid4(),
     )
 
     assert result is None
+
+
+def test_error_signatures_include_generic_codes_and_are_deduplicated_and_bounded():
+    entries = [
+        {
+            "level": "ERROR",
+            "message": (
+                "PAY-1042 failed with PaymentRetryExhausted and payment_timeout; "
+                "retrying PAY-1042. "
+                "DB_CONN-7 and CACHE-12 also failed."
+            ),
+        },
+        {"level": "INFO", "message": "IGNORED-200"},
+    ]
+
+    assert _error_signatures(entries, limit=3) == [
+        "PaymentRetryExhausted",
+        "payment_timeout",
+        "PAY-1042",
+    ]
+
+
+def test_hypothesis_can_match_a_non_exception_error_code():
+    log_id = uuid.uuid4()
+    code_id = uuid.uuid4()
+
+    result = _candidate(
+        "PAY-1042",
+        [{"path": "payments/handler.py", "line_number": 27, "line": 'raise Error("PAY-1042")'}],
+        log_id,
+        code_id,
+    )
+
+    assert result is not None
+    assert result["signature"] == "PAY-1042"
+    assert result["evidence_ids"] == [str(log_id), str(code_id)]
 
 
 async def test_local_git_adapter_scopes_search_to_configured_subdirectory(tmp_path):

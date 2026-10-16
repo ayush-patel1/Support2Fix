@@ -21,6 +21,7 @@ from app.models.membership import Role
 class FakeSession:
     def __init__(self) -> None:
         self.records: list[Any] = []
+        self.flush_count = 0
 
     async def __aenter__(self) -> "FakeSession":
         return self
@@ -30,6 +31,9 @@ class FakeSession:
 
     def add(self, record: Any) -> None:
         self.records.append(record)
+
+    async def flush(self) -> None:
+        self.flush_count += 1
 
     async def commit(self) -> None:
         return None
@@ -51,7 +55,7 @@ class FakeMCPClient:
             SimpleNamespace(
                 name="code.search_code",
                 description="Search files",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "organization_id": {"type": "string"},
@@ -61,12 +65,12 @@ class FakeMCPClient:
                     "required": ["organization_id", "integration_id", "query"],
                     "additionalProperties": False,
                 },
-                outputSchema=None,
+                output_schema=None,
             ),
             SimpleNamespace(
                 name="code.create_branch",
                 description="Create branch",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "organization_id": {"type": "string"},
@@ -77,7 +81,7 @@ class FakeMCPClient:
                     "required": ["organization_id", "integration_id", "name", "base"],
                     "additionalProperties": False,
                 },
-                outputSchema=None,
+                output_schema=None,
             ),
         ]
 
@@ -89,8 +93,11 @@ class FakeMCPClient:
         if self.error is not None:
             raise self.error
         return SimpleNamespace(
-            isError=False,
-            structuredContent={"message": "Contact admin@example.com", "token": "secret-value"},
+            is_error=False,
+            structured_content={
+                "message": "Contact admin@example.com",
+                "token": "secret-value",
+            },
             content=[],
         )
 
@@ -271,6 +278,7 @@ async def test_successful_call_injects_scope_and_persists_redacted_evidence(gate
     assert result.untrusted_data is not None
     assert "admin@example.com" not in result.untrusted_data
     assert len(session_factory.session.records) == 2
+    assert session_factory.session.flush_count == 1
     assert session_factory.session.records[1].content == result.data
 
 

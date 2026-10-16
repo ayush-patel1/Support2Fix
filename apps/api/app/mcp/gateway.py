@@ -80,8 +80,8 @@ class GatewayCallResult:
 
 class MCPTool(Protocol):
     name: str
-    inputSchema: dict[str, Any]
-    outputSchema: dict[str, Any] | None
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any] | None
     description: str | None
 
 
@@ -307,7 +307,7 @@ class ToolGateway:
                 {
                     "name": tool.name,
                     "description": tool.description or "",
-                    "input_schema": _without_tenant_properties(tool.inputSchema),
+                    "input_schema": _without_tenant_properties(tool.input_schema),
                     "risk": policy.risk.value,
                 }
             )
@@ -335,7 +335,7 @@ class ToolGateway:
 
         try:
             injected_arguments = validate_and_inject_arguments(
-                tool_name, arguments, tool.inputSchema, context
+                tool_name, arguments, tool.input_schema, context
             )
         except (TypeError, ValueError) as exc:
             result = PolicyResult(PolicyDecision.DENY, str(exc))
@@ -375,19 +375,17 @@ class ToolGateway:
             await self._record_call(tool_name, arguments, context, failed, None, reason)
             return GatewayCallResult(failed.decision, failed.reason)
 
-        if response.isError:
+        if response.is_error:
             reason = "MCP tool returned an error."
             failed = PolicyResult(PolicyDecision.DENY, reason)
             await self._record_call(tool_name, arguments, context, failed, None, reason)
             return GatewayCallResult(failed.decision, failed.reason)
 
-        data = getattr(response, "structuredContent", None)
-        if data is None:
-            data = getattr(response, "structured_content", None)
+        data = getattr(response, "structured_content", None)
         if data is None:
             data = [getattr(item, "text", "") for item in response.content]
-        if tool.outputSchema is not None:
-            errors = sorted(Draft202012Validator(tool.outputSchema).iter_errors(data), key=str)
+        if tool.output_schema is not None:
+            errors = sorted(Draft202012Validator(tool.output_schema).iter_errors(data), key=str)
             if errors:
                 reason = "MCP tool returned output that does not match its schema."
                 failed = PolicyResult(PolicyDecision.DENY, reason)
@@ -451,6 +449,7 @@ class ToolGateway:
                 )
             )
             if evidence is not None:
+                await db.flush()
                 evidence_id = uuid7()
                 db.add(
                     Evidence(
