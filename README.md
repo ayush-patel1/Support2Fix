@@ -54,7 +54,7 @@ DEMO_PASSWORD='replace-with-a-local-password' \
   docker compose run --rm -e DEMO_PASSWORD worker python -m app.demo_seed
 ```
 
-The demo login is `demo@support2fix.local` and the password is the value
+The demo login is `demo@support2fix.example.com` and the password is the value
 you supplied. Open `/login`, then select **Tickets**, open the seeded
 checkout ticket, and choose **Start investigation**. The API queues the
 request in Postgres; the worker calls the configured local log, deployment,

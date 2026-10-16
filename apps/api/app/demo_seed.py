@@ -30,7 +30,8 @@ from app.models.ticket import Ticket, TicketEvent, TicketEventType, TicketPriori
 from app.models.user import User
 from app.repositories.organizations import OrganizationRepository
 
-DEMO_EMAIL = "demo@support2fix.local"
+DEMO_EMAIL = "demo@support2fix.example.com"
+LEGACY_DEMO_EMAIL = "demo@support2fix.local"
 DEMO_ORGANIZATION = "Support2Fix Demo"
 DEMO_TICKET_TITLE = "Checkout fails after a zero-value coupon"
 
@@ -62,6 +63,12 @@ async def seed_demo() -> str:
             user = (
                 await db.execute(select(User).where(User.email == DEMO_EMAIL))
             ).scalar_one_or_none()
+            if user is None:
+                user = (
+                    await db.execute(select(User).where(User.email == LEGACY_DEMO_EMAIL))
+                ).scalar_one_or_none()
+                if user is not None:
+                    user.email = DEMO_EMAIL
             if user is None:
                 user = User(email=DEMO_EMAIL, password_hash=hash_password(password))
                 db.add(user)

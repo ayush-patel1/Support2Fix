@@ -12,14 +12,13 @@
  */
 
 import Image from "next/image";
-import logoAsset from "@/public/support2fix.png";
 
 const ASPECT_RATIO = 1372 / 1147;
 
 export function LogoMark({ className, size = 32 }: { className?: string; size?: number }) {
   return (
     <Image
-      src={logoAsset}
+      src="/support2fix.png"
       alt="Support2Fix"
       width={size}
       height={Math.round(size / ASPECT_RATIO)}

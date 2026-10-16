@@ -30,9 +30,6 @@ def upgrade() -> None:
         "FAILED",
         name="investigation_event_type",
     )
-    investigation_status.create(op.get_bind())
-    investigation_event_type.create(op.get_bind())
-
     op.create_table(
         "investigations",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),

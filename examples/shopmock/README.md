@@ -15,16 +15,16 @@ Payment processing now completes such orders immediately without creating
 or polling an intent. Regression tests cover this behavior alongside normal
 and partially discounted orders.
 
-This is the same scenario the investigation console preview
-(`apps/web/app/investigations/[id]`) already dramatizes — this app is
-what makes that scenario real instead of illustrative static text.
+Support2Fix's investigation worker reads the checked-in source, deployment,
+and historical log fixtures through the local integration adapters. It
+reports a source-matched hypothesis, not a confirmed root cause.
 
-**This repo has its own git history** (a real, separate `.git`, gitignored
-by the outer project repo) with the actual regression commit:
+The app lives in the main Support2Fix Git repository rather than a nested
+repository. The Phase 5 commit that introduced the target implementation is:
 
 ```bash
-git log --oneline
-git show 44f7845   # "Optimize coupon validation" — introduces the bug
+git log --oneline -- examples/shopmock
+git show 224f8a8:examples/shopmock/app/services/payment_service.py
 ```
 
 ## Running it
@@ -59,9 +59,9 @@ project.
 ## Fixtures
 
 - `logs/application.jsonl` — historical incident log lines, timestamped to
-  match the investigation console preview's timeline.
+  match the historical deployment.
 - `data/deployments.json` — the `v2.8.1` deployment record, with the real
-  commit hash of the regression.
+  Support2Fix commit hash that introduced this target implementation.
 
 Regenerate both (and reseed the database) with `python -m app.seed`.
 
