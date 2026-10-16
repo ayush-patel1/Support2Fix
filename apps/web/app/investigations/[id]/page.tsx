@@ -8,9 +8,7 @@ import {
   ApiError,
   getInvestigation,
   getTicket,
-  listInvestigationEvents,
   type InvestigationDetail,
-  type InvestigationEvent,
   type Ticket,
 } from "@/lib/api";
 import { useAuthGuard } from "@/lib/useAuthGuard";
@@ -46,19 +44,14 @@ export default function InvestigationPage() {
   const { me, loading: authLoading } = useAuthGuard();
   const [investigation, setInvestigation] = useState<InvestigationDetail | null>(null);
   const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [events, setEvents] = useState<InvestigationEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const investigationStatus = investigation?.status;
 
   const refresh = useCallback(async () => {
     try {
       const result = await getInvestigation(investigationId);
-      const [timeline, ticketResult] = await Promise.all([
-        listInvestigationEvents(investigationId),
-        getTicket(result.ticket_id),
-      ]);
+      const ticketResult = await getTicket(result.ticket_id);
       setInvestigation(result);
-      setEvents(timeline);
       setTicket(ticketResult);
       setError(null);
     } catch (err) {
@@ -185,15 +178,24 @@ export default function InvestigationPage() {
             <section className="rounded-lg border border-neutral-200 p-5 dark:border-neutral-800">
               <h2 className="font-semibold">Activity</h2>
               <ol className="mt-4 space-y-4">
-                {events.map((event) => (
-                  <li key={event.id} className="border-l-2 border-brand/50 pl-4">
-                    <p className="text-sm">{event.message}</p>
+                {investigation.timeline.map((item) => (
+                  <li key={`${item.kind}-${item.id}`} className="border-l-2 border-brand/50 pl-4">
+                    {item.evidence_id ? (
+                      <a
+                        href={`#evidence-${item.evidence_id}`}
+                        className="text-sm font-medium underline"
+                      >
+                        {item.title}
+                      </a>
+                    ) : (
+                      <p className="text-sm">{item.title}</p>
+                    )}
                     <time className="mt-1 block text-xs text-neutral-500">
-                      {formatTime(event.created_at)}
+                      {formatTime(item.occurred_at)}
                     </time>
                   </li>
                 ))}
-                {events.length === 0 && (
+                {investigation.timeline.length === 0 && (
                   <li className="text-sm text-neutral-500">No activity recorded yet.</li>
                 )}
               </ol>
@@ -220,7 +222,9 @@ export default function InvestigationPage() {
                     SHA-256: <span className="break-all font-mono">{item.content_sha256}</span>
                   </p>
                   <details className="mt-3">
-                    <summary className="cursor-pointer text-sm font-medium">View redacted data</summary>
+                    <summary className="cursor-pointer text-sm font-medium">
+                      View redacted data
+                    </summary>
                     <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-900">
                       {pretty(item.content)}
                     </pre>

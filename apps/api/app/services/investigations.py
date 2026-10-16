@@ -1,6 +1,7 @@
 """Investigation lifecycle, including atomic ticket transition and queueing."""
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +16,42 @@ from app.models.investigation import (
 from app.models.ticket import Ticket, TicketEvent, TicketEventType, TicketStatus
 from app.models.tool_call import Evidence, ToolCall
 from app.repositories.investigations import InvestigationRepository
-from app.schemas.investigation import EvidencePublic, InvestigationDetail, InvestigationPublic
+from app.schemas.investigation import (
+    EvidencePublic,
+    InvestigationDetail,
+    InvestigationPublic,
+    InvestigationTimelineItem,
+)
 from app.services.tickets import ALLOWED_TRANSITIONS
+
+
+def build_investigation_timeline(
+    events: Sequence[InvestigationEvent],
+    evidence: Sequence[EvidencePublic],
+) -> list[InvestigationTimelineItem]:
+    timeline = [
+        InvestigationTimelineItem(
+            id=event.id,
+            kind="EVENT",
+            occurred_at=event.created_at,
+            title=event.message,
+            details=event.details,
+        )
+        for event in events
+    ]
+    timeline.extend(
+        InvestigationTimelineItem(
+            id=item.id,
+            kind="EVIDENCE",
+            occurred_at=item.observed_at,
+            title=f"Collected {item.kind} evidence with {item.tool_name}.",
+            details={"source_ref": item.source_ref, "content_sha256": item.content_sha256},
+            evidence_id=item.id,
+        )
+        for item in evidence
+    )
+    timeline.sort(key=lambda item: (item.occurred_at, str(item.id)))
+    return timeline
 
 
 class InvestigationService:
@@ -130,9 +165,11 @@ class InvestigationService:
             )
             for item, tool_name in rows
         ]
+        events = await self.investigations.list_events(organization_id, investigation_id)
         return InvestigationDetail(
             **InvestigationPublic.model_validate(investigation).model_dump(),
             evidence=evidence,
+            timeline=build_investigation_timeline(events, evidence),
         )
 
     async def list_events(

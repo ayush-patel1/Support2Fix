@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -31,8 +31,18 @@ class EvidencePublic(BaseModel):
     tool_name: str
 
 
+class InvestigationTimelineItem(BaseModel):
+    id: uuid.UUID
+    kind: Literal["EVENT", "EVIDENCE"]
+    occurred_at: datetime
+    title: str
+    details: dict[str, Any]
+    evidence_id: uuid.UUID | None = None
+
+
 class InvestigationDetail(InvestigationPublic):
     evidence: list[EvidencePublic]
+    timeline: list[InvestigationTimelineItem]
 
 
 class InvestigationEventPublic(BaseModel):

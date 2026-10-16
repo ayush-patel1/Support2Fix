@@ -221,6 +221,7 @@ export interface InvestigationEvidence {
 
 export interface InvestigationDetail extends Investigation {
   evidence: InvestigationEvidence[];
+  timeline: InvestigationTimelineItem[];
 }
 
 export interface InvestigationEvent {
@@ -239,6 +240,15 @@ export function startInvestigation(
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
   });
+}
+
+export interface InvestigationTimelineItem {
+  id: string;
+  kind: "EVENT" | "EVIDENCE";
+  occurred_at: string;
+  title: string;
+  details: Record<string, unknown>;
+  evidence_id: string | null;
 }
 
 export function getInvestigation(id: string): Promise<InvestigationDetail> {
