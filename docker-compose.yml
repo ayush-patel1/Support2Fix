@@ -34,6 +34,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-support2fix}:${POSTGRES_PASSWORD:-support2fix}@postgres:5432/${POSTGRES_DB:-support2fix}
+      MCP_SERVER_URL: http://tools:8100/mcp
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
     ports:
       - "8000:8000"
     depends_on:
@@ -55,6 +57,28 @@ services:
         condition: service_healthy
     volumes:
       - ./apps/api:/app
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: ../../infrastructure/docker/api.Dockerfile
+    command: ["python", "-m", "app.worker.main"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-support2fix}:${POSTGRES_PASSWORD:-support2fix}@postgres:5432/${POSTGRES_DB:-support2fix}
+      MCP_SERVER_URL: http://tools:8100/mcp
+      WORKER_POLL_SECONDS: "1"
+      DEMO_REPO_PATH: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tools:
+        condition: service_started
+      api:
+        condition: service_started
+    volumes:
+      - ./apps/api:/app
+      - ./:/workspace:ro
 
   web:
     build:

@@ -33,10 +33,8 @@ async def list_products(db: AsyncSession = Depends(get_db)) -> list[Product]:
 async def checkout(body: CheckoutRequest, db: AsyncSession = Depends(get_db)) -> OrderPublic:
     """Creates an order from a subtotal + optional coupon, then processes
 
-    payment synchronously. A coupon that zeroes the total (SAVE100 on a
-    cart at or under the discount) will hang in PaymentService's retry loop
-    until it hits the safety cap and this returns 500 — that's the bug,
-    left in place on purpose. See payment_service.py.
+    payment synchronously. Orders reduced to zero by a coupon complete
+    without creating a payment intent.
     """
     stmt = select(User).where(User.email == body.user_email)
     user = (await db.execute(stmt)).scalar_one_or_none()

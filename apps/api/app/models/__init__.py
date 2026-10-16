@@ -14,10 +14,18 @@ from app.models.customer import (
     Service,
 )
 from app.models.integration import Integration, IntegrationKind, IntegrationProvider
+from app.models.investigation import (
+    Investigation,
+    InvestigationEvent,
+    InvestigationEventType,
+    InvestigationJob,
+    InvestigationStatus,
+)
 from app.models.membership import Membership, Role
 from app.models.organization import Organization
 from app.models.session import Session
 from app.models.ticket import Ticket, TicketEvent, TicketEventType, TicketPriority, TicketStatus
+from app.models.tool_call import Evidence, ToolCall
 from app.models.user import User
 
 __all__ = [
@@ -27,9 +35,15 @@ __all__ = [
     "CustomerTier",
     "Deployment",
     "DeploymentStatus",
+    "Evidence",
     "Integration",
     "IntegrationKind",
     "IntegrationProvider",
+    "Investigation",
+    "InvestigationEvent",
+    "InvestigationEventType",
+    "InvestigationJob",
+    "InvestigationStatus",
     "Membership",
     "Organization",
     "RepositoryProvider",
@@ -41,5 +55,6 @@ __all__ = [
     "TicketEventType",
     "TicketPriority",
     "TicketStatus",
+    "ToolCall",
     "User",
 ]

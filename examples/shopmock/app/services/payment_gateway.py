@@ -1,8 +1,7 @@
 """A fake payment gateway — stands in for Stripe/etc. so the mock shop has
 
-no real external dependency. `create_intent` is the one call
-PaymentService is supposed to guard against a zero-dollar order and
-doesn't — see payment_service.py.
+no real external dependency. `create_intent` rejects non-positive amounts;
+PaymentService must avoid calling it for orders with nothing to charge.
 """
 
 import uuid

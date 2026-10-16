@@ -79,9 +79,7 @@ class Payment(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"), unique=True)
-    # NULL exactly when the order total is zero — see PaymentService. This
-    # column existing as nullable, with no code path handling the null
-    # case, IS the bug's root shape.
+    # NULL when the order total is zero, since there is nothing to charge.
     payment_intent_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(
         Enum(PaymentStatus, name="payment_status"), default=PaymentStatus.PENDING

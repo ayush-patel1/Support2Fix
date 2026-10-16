@@ -1,8 +1,4 @@
-"""Cart -> order, with an optional coupon applied. Correct code — the bug
-
-lives entirely in payment_service.py, not here; this just produces the
-zero-total order that triggers it.
-"""
+"""Cart -> order, with an optional coupon applied."""
 
 import uuid
 

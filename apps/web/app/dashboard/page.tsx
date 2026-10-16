@@ -97,11 +97,11 @@ export default function DashboardPage() {
             cta="View customers"
           />
           <DashboardCard
-            title="Investigation console"
-            description="Root cause, evidence, reproduction, fix and approval — end to end."
-            phase="Design preview"
-            href="/investigations/2841"
-            cta="View preview"
+            title="Evidence investigations"
+            description="Queue scoped log, deployment, and source-code collection from a support ticket."
+            phase="Working"
+            href="/tickets"
+            cta="Choose a ticket"
           />
         </div>
       </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PriorityBadge, StatusBadge } from "@/components/TicketBadges";
 import { TopNav } from "@/components/TopNav";
@@ -10,6 +10,7 @@ import {
   changeTicketStatus,
   getTicket,
   listTicketEvents,
+  startInvestigation,
   type Ticket,
   type TicketEvent,
   type TicketPriority,
@@ -30,6 +31,7 @@ const ALL_STATUSES: TicketStatus[] = [
 export default function TicketDetailPage() {
   const params = useParams<{ id: string }>();
   const ticketId = params.id;
+  const router = useRouter();
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [events, setEvents] = useState<TicketEvent[]>([]);
@@ -114,6 +116,24 @@ export default function TicketDetailPage() {
     } catch (err) {
       setActionError(
         err instanceof ApiError ? (err.detail ?? err.message) : "Failed to add comment.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStartInvestigation() {
+    if (!ticket) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const investigation = await startInvestigation(ticket.id, crypto.randomUUID());
+      router.push(`/investigations/${investigation.id}`);
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError
+          ? (err.detail ?? err.message)
+          : "Could not start the investigation.",
       );
     } finally {
       setBusy(false);
@@ -212,6 +232,24 @@ export default function TicketDetailPage() {
             </>
           )}
         </div>
+
+        {(ticket.status === "OPEN" || ticket.status === "ESCALATED") && (
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand/30 bg-brand/5 p-4">
+            <div>
+              <h2 className="font-medium">Investigate with collected evidence</h2>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                Collect scoped logs, deployment history, and matching source code.
+              </p>
+            </div>
+            <button
+              onClick={handleStartInvestigation}
+              disabled={busy}
+              className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-brand-ink disabled:opacity-50"
+            >
+              {busy ? "Starting…" : "Start investigation"}
+            </button>
+          </section>
+        )}
 
         <div className="flex items-center gap-2 border-t border-neutral-200 pt-4 dark:border-neutral-800">
           <span className="text-sm font-medium">Change status:</span>

@@ -186,6 +186,69 @@ export function addTicketComment(id: string, comment: string): Promise<TicketEve
   });
 }
 
+// --- Investigations ---------------------------------------------------
+
+export type InvestigationStatus = "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+
+export interface Investigation {
+  id: string;
+  ticket_id: string;
+  status: InvestigationStatus;
+  summary: string | null;
+  candidate: {
+    classification: string;
+    summary: string;
+    signature?: string;
+    path?: string;
+    line_number?: number;
+    evidence_ids: string[];
+  } | null;
+  evidence_gaps: string[];
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface InvestigationEvidence {
+  id: string;
+  kind: string;
+  source_ref: string | null;
+  content: unknown;
+  content_sha256: string;
+  observed_at: string;
+  tool_name: string;
+}
+
+export interface InvestigationDetail extends Investigation {
+  evidence: InvestigationEvidence[];
+}
+
+export interface InvestigationEvent {
+  id: string;
+  type: "QUEUED" | "STARTED" | "TOOL_COMPLETED" | "COMPLETED" | "FAILED";
+  message: string;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export function startInvestigation(
+  ticketId: string,
+  idempotencyKey: string,
+): Promise<Investigation> {
+  return apiFetch<Investigation>(`/v1/tickets/${ticketId}/investigations`, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+  });
+}
+
+export function getInvestigation(id: string): Promise<InvestigationDetail> {
+  return apiFetch<InvestigationDetail>(`/v1/investigations/${id}`);
+}
+
+export function listInvestigationEvents(id: string): Promise<InvestigationEvent[]> {
+  return apiFetch<InvestigationEvent[]>(`/v1/investigations/${id}/events`);
+}
+
 // --- Customer context (Phase 4) ---------------------------------------
 
 export type CustomerTier = "FREE" | "STANDARD" | "ENTERPRISE";

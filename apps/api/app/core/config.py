@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     # for the "short-lived service token" the doc describes until there's a
     # real token issuer to rotate one (a later infra phase).
     mcp_service_token: str = "dev-local-service-token"
+    mcp_server_url: str = "http://localhost:8100/mcp"
+    worker_poll_seconds: float = 1.0
 
 
 @lru_cache
