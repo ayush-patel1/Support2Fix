@@ -5,12 +5,10 @@ interfaces this configures: CodeHost, LogSource, DataSource,
 DeploymentSource, SupportSource).
 
 `config` holds whatever a given (kind, provider) adapter needs to connect
-(a filesystem path for the local adapters today; a base URL/org name for a
-real vendor adapter later) — never a secret. `secret_ref` is reserved for
-that: a pointer into the secret store (security.md §"secrets": AWS Secrets
-Manager + KMS), resolved server-side only, never round-tripped through the
-API. The local adapters need no credentials, so it's unused until a real
-vendor adapter (Phase 15+) needs one.
+(a filesystem path or GitHub repository/installation metadata) — never a
+secret. GitHub App private keys are supplied at runtime through environment
+configuration or a mounted secret file and never round-trip through the API.
+`secret_ref` remains reserved for a future external secret manager.
 """
 
 import enum
@@ -35,7 +33,8 @@ class IntegrationKind(enum.StrEnum):
 
 
 class IntegrationProvider(enum.StrEnum):
-    LOCAL = "LOCAL"  # the only adapters built so far — see ADR-001 D13
+    LOCAL = "LOCAL"
+    GITHUB_APP = "GITHUB_APP"
 
 
 class Integration(Base):

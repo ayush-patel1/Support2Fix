@@ -88,10 +88,10 @@ async def create_pull_request(
     description: str,
     ctx: Context,
 ) -> dict[str, Any]:
-    """Open a pull request. Not implemented for the local git adapter
+    """Open a pull request on supported hosted providers.
 
-    (a PR is a hosted-platform concept) — raises a clear tool error until
-    the GitHub adapter (Phase 15) exists.
+    The local git adapter raises a clear tool error because it has no PR
+    concept. The ToolGateway still requires hash-bound human approval.
     """
     async with _adapter(ctx, organization_id, integration_id) as adapter:
         result = await adapter.create_pull_request(

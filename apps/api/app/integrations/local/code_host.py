@@ -1,12 +1,10 @@
 """CodeHost backed by a real local git repository — no vendor API, no
 
 network, just `git` shelled out against a filesystem path. This is the
-adapter ADR-001 D13 calls "the local git adapter" (the default; GitHub is
-the real adapter, not built yet).
+local-development adapter; hosted repositories use the GitHub App adapter.
 
 `create_pull_request` has no local equivalent (a PR is a hosted-platform
-concept) and raises `NotImplementedError` rather than faking one — a real
-implementation needs the GitHub adapter (Phase 15).
+concept) and raises `NotImplementedError` rather than faking one.
 """
 
 import asyncio
@@ -161,6 +159,5 @@ class LocalGitCodeHost:
         self, *, branch: str, base: str, title: str, description: str
     ) -> PullRequestInfo:
         raise NotImplementedError(
-            "The local git adapter has no pull-request concept — that needs the "
-            "GitHub adapter (Phase 15), not built yet."
+            "The local git adapter has no pull-request concept; use a hosted code provider."
         )

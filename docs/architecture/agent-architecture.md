@@ -237,22 +237,15 @@ class LLMClient(Protocol):
 
 `task` selects the model and settings from configuration. Every call records model, input/output/cache tokens, latency and cost to `investigation_steps` and to telemetry.
 
-### 7.2 Default provider: Anthropic Claude (official Python SDK)
+### 7.2 Current provider implementation: Gemini
 
-Based on current Claude API guidance:
-
-- **Model:** default `claude-opus-5` for all nodes, with adaptive thinking. Model and effort are **configurable per task** through environment variables (for example a cheaper `claude-sonnet-5` / `claude-haiku-4-5` for extraction-style nodes). Changing them is a decision made from Phase 20 evaluation results, not assumed up front.
-- **Structured outputs:** `client.messages.parse()` with Pydantic schemas (`output_config.format`) for node outputs, and `strict: true` on tool definitions so tool inputs are schema-valid. Some newer models reject forced `tool_choice`, so the design relies on `auto` + strict schemas + prompting rather than forced tool calls.
-- **Prompt caching:** tool definitions and system prompts are frozen and deterministically ordered (tools → system → messages). Volatile content (timestamps, IDs) goes after the cache breakpoint. `cache_read_input_tokens` is monitored.
-- **Refusals:** check `stop_reason` before reading content. `refusal` is handled explicitly (a configured fallback, or escalate).
-- **Streaming** for long generations (fix diffs, reports) to avoid HTTP timeouts.
-- **Parallel tool calls:** allowed in collection nodes. All results go back in one message, and failed calls return `is_error` results rather than being dropped.
+This is a proposed target architecture, while the current codebase implements only a bounded, optional Gemini diagnosis call after evidence collection. It uses Google's `google-genai` SDK with structured JSON output; it is not yet the full node-by-node LLM orchestration described in this document. Live requests require `LLM_MODE=live`, `GEMINI_API_KEY`, and `LLM_ALLOW_EXTERNAL_DATA=true`. Evidence is grounded against collected evidence IDs, error signature, and exact source path/line before its diagnosis is accepted.
 
 ### 7.3 Test and demo modes
 
 - **`FakeLLMClient`** (unit tests): returns scripted structured outputs, so graph logic, validators and routing can be tested without network access.
 - **`ReplayLLMClient`** (deterministic demo and regression): records real model responses keyed by a hash of the request and replays them. **Tools still execute for real** against the mock environment. The UI and reports label replay runs. Replay mode is for demo reliability only. It is never used to claim evaluation metrics.
-- **Mode selection** is one env var, `LLM_MODE=live|replay|fake`. With `live` and no `ANTHROPIC_API_KEY`, the app still starts. Everything except investigations works, and starting one fails with a clear "LLM not configured" error. It never falls back to fake output silently.
+- **Mode selection** uses `LLM_MODE`. The current default is fake/offline mode; evidence collection works without a live model. If live mode lacks provider configuration or external-data consent, no external request is made and the investigation records a diagnosis gap rather than silently substituting an answer.
 
 ### 7.4 Embeddings
 

@@ -26,10 +26,17 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://support2fix:support2fix@localhost:5432/support2fix"
     database_echo: bool = False
 
-    # LLM mode — see agent-architecture.md §7.3. Not used until Phase 9, but
-    # declared here so it's visible in .env.example from Phase 1 onward.
+    # LLM inputs leave the self-hosted installation only when both live mode
+    # and explicit external-data consent are configured.
     llm_mode: Literal["live", "replay", "fake"] = "fake"
-    anthropic_api_key: str | None = None
+    llm_provider: Literal["gemini"] = "gemini"
+    llm_model: str = "gemini-2.5-flash"
+    llm_allow_external_data: bool = False
+    gemini_api_key: str | None = None
+    github_app_id: str | None = None
+    github_app_private_key: str | None = None
+    github_app_private_key_path: str | None = None
+    github_api_url: str = "https://api.github.com"
 
     # Sessions — see security.md §10.
     session_cookie_name: str = "s2f_session"

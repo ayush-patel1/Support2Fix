@@ -18,6 +18,7 @@ from app.schemas.ticket import (
     TicketEventPublic,
     TicketListResponse,
     TicketPublic,
+    TicketRepositoryOption,
     TicketStatusUpdate,
     TicketUpdate,
 )
@@ -35,12 +36,22 @@ async def create_ticket(
     ticket = await TicketService(db).create_ticket(
         ctx.organization_id,
         customer_id=body.customer_id,
+        code_host_integration_id=body.code_host_integration_id,
         created_by=ctx.user_id,
         title=body.title,
         description=body.description,
         priority=body.priority,
     )
     return TicketPublic.model_validate(ticket)
+
+
+@router.get("/repositories", response_model=list[TicketRepositoryOption])
+async def list_ticket_repositories(
+    ctx: OrgContext = Depends(get_org_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[TicketRepositoryOption]:
+    integrations = await TicketService(db).list_code_host_options(ctx.organization_id)
+    return [TicketRepositoryOption(id=item.id, name=item.name) for item in integrations]
 
 
 @router.get("", response_model=TicketListResponse)

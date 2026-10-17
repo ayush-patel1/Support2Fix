@@ -122,6 +122,7 @@ export type TicketEventType = "CREATED" | "FIELD_CHANGED" | "STATUS_CHANGED" | "
 export interface Ticket {
   id: string;
   customer_id: string;
+  code_host_integration_id: string | null;
   created_by: string | null;
   title: string;
   description: string;
@@ -129,6 +130,11 @@ export interface Ticket {
   status: TicketStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface TicketRepositoryOption {
+  id: string;
+  name: string;
 }
 
 export interface TicketEvent {
@@ -161,11 +167,16 @@ export function getTicket(id: string): Promise<Ticket> {
 
 export function createTicket(data: {
   customer_id: string;
+  code_host_integration_id?: string;
   title: string;
   description?: string;
   priority?: TicketPriority;
 }): Promise<Ticket> {
   return apiFetch<Ticket>("/v1/tickets", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function listTicketRepositories(): Promise<TicketRepositoryOption[]> {
+  return apiFetch<TicketRepositoryOption[]>("/v1/tickets/repositories");
 }
 
 export function updateTicket(
@@ -274,7 +285,7 @@ export type IntegrationKind =
 export interface Integration {
   id: string;
   kind: IntegrationKind;
-  provider: "LOCAL";
+  provider: "LOCAL" | "GITHUB_APP";
   name: string;
   config: Record<string, unknown>;
   created_at: string;

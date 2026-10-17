@@ -1,7 +1,8 @@
 import uuid
 
 from app.integrations.local.code_host import LocalGitCodeHost
-from app.worker.investigations import _candidate, _error_signatures
+from app.models.integration import Integration, IntegrationKind
+from app.worker.investigations import _candidate, _error_signatures, _select_code_host
 
 
 def test_hypothesis_requires_same_signature_in_logs_and_source():
@@ -73,6 +74,41 @@ def test_hypothesis_can_match_a_non_exception_error_code():
     assert result is not None
     assert result["signature"] == "PAY-1042"
     assert result["evidence_ids"] == [str(log_id), str(code_id)]
+
+
+def test_code_host_selection_requires_ticket_association_when_multiple_repositories_exist():
+    selected_id = uuid.uuid4()
+    integrations = [
+        Integration(id=selected_id, kind=IntegrationKind.CODE_HOST),
+        Integration(id=uuid.uuid4(), kind=IntegrationKind.CODE_HOST),
+    ]
+
+    selected, gap = _select_code_host(integrations, None)
+
+    assert selected is None
+    assert gap == "Multiple code-host integrations are configured; select one on the ticket."
+
+
+def test_code_host_selection_uses_ticket_association():
+    selected_id = uuid.uuid4()
+    integrations = [
+        Integration(id=selected_id, kind=IntegrationKind.CODE_HOST),
+        Integration(id=uuid.uuid4(), kind=IntegrationKind.CODE_HOST),
+    ]
+
+    selected, gap = _select_code_host(integrations, selected_id)
+
+    assert selected is integrations[0]
+    assert gap is None
+
+
+def test_code_host_selection_falls_back_only_when_one_repository_exists():
+    integration = Integration(id=uuid.uuid4(), kind=IntegrationKind.CODE_HOST)
+
+    selected, gap = _select_code_host([integration], None)
+
+    assert selected is integration
+    assert gap is None
 
 
 async def test_local_git_adapter_scopes_search_to_configured_subdirectory(tmp_path):

@@ -9,9 +9,13 @@ Adding a real vendor adapter later (e.g. GitHub for `CodeHost`) means
 adding one branch here, not touching any caller.
 """
 
+from pathlib import Path
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.integrations.base import CodeHost, DataSource, DeploymentSource, LogSource, SupportSource
+from app.integrations.github.code_host import GitHubAppCodeHost
 from app.integrations.local.code_host import LocalGitCodeHost
 from app.integrations.local.data_source import LocalPostgresDataSource
 from app.integrations.local.deployment_source import LocalFileDeploymentSource
@@ -30,6 +34,13 @@ def _require_config_str(integration: Integration, key: str) -> str:
     return value
 
 
+def _optional_config_str(integration: Integration, key: str, default: str) -> str:
+    value = integration.config.get(key, default)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Integration {integration.id} has an invalid {key!r} config value.")
+    return value
+
+
 def build_adapter(
     integration: Integration, *, db: AsyncSession | None = None
 ) -> CodeHost | LogSource | DataSource | DeploymentSource | SupportSource:
@@ -38,14 +49,42 @@ def build_adapter(
     `db` is only required for `SUPPORT_SOURCE`, the one kind that wraps the
     platform's own database instead of an external system.
     """
+    if integration.kind == IntegrationKind.CODE_HOST:
+        if integration.provider == IntegrationProvider.GITHUB_APP:
+            settings = get_settings()
+            private_key = settings.github_app_private_key
+            if not private_key and settings.github_app_private_key_path:
+                try:
+                    private_key = Path(settings.github_app_private_key_path).read_text(
+                        encoding="utf-8"
+                    )
+                except OSError as exc:
+                    raise ValueError("GitHub App private key file could not be read.") from exc
+            if not settings.github_app_id or not private_key:
+                raise ValueError(
+                    "GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY (or "
+                    "GITHUB_APP_PRIVATE_KEY_PATH) must be configured."
+                )
+            return GitHubAppCodeHost(
+                app_id=settings.github_app_id,
+                private_key=private_key,
+                installation_id=_require_config_str(integration, "installation_id"),
+                repository=_require_config_str(integration, "repository"),
+                default_branch=_optional_config_str(integration, "default_branch", "main"),
+                api_url=settings.github_api_url,
+            )
+        if integration.provider != IntegrationProvider.LOCAL:
+            raise ValueError(
+                f"No adapter registered for provider {integration.provider.value!r} "
+                f"(kind={integration.kind.value})."
+            )
+        return LocalGitCodeHost(_require_config_str(integration, "repo_path"))
+
     if integration.provider != IntegrationProvider.LOCAL:
         raise ValueError(
             f"No adapter registered for provider {integration.provider.value!r} "
             f"(kind={integration.kind.value})."
         )
-
-    if integration.kind == IntegrationKind.CODE_HOST:
-        return LocalGitCodeHost(_require_config_str(integration, "repo_path"))
 
     if integration.kind == IntegrationKind.LOG_SOURCE:
         return LocalFileLogSource(_require_config_str(integration, "log_path"))

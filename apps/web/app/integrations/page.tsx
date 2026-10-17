@@ -23,6 +23,10 @@ export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [name, setName] = useState("");
   const [repoPath, setRepoPath] = useState("");
+  const [provider, setProvider] = useState<Integration["provider"]>("LOCAL");
+  const [githubRepository, setGithubRepository] = useState("");
+  const [installationId, setInstallationId] = useState("");
+  const [defaultBranch, setDefaultBranch] = useState("main");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -56,12 +60,22 @@ export default function IntegrationsPage() {
     try {
       const created = await createIntegration({
         kind: "CODE_HOST",
+        provider,
         name: name.trim(),
-        config: { repo_path: repoPath.trim() },
+        config:
+          provider === "LOCAL"
+            ? { repo_path: repoPath.trim() }
+            : {
+                repository: githubRepository.trim(),
+                installation_id: installationId.trim(),
+                default_branch: defaultBranch.trim(),
+              },
       });
       setIntegrations((current) => [created, ...current]);
       setName("");
       setRepoPath("");
+      setGithubRepository("");
+      setInstallationId("");
       setNotice("Repository connected.");
     } catch (err) {
       setError(errorMessage(err, "Failed to connect repository."));
@@ -146,9 +160,8 @@ export default function IntegrationsPage() {
             <section className="rounded-lg border border-neutral-200 p-5 dark:border-neutral-800">
               <h2 className="font-semibold">Connect a Git repository</h2>
               <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                Enter a path to an existing Git working tree visible to the API, tools, and worker.
-                Repository contents are read from the current checkout; no Git credentials are
-                stored.
+                Connect a local Git working tree or a GitHub App installation. GitHub credentials
+                are configured on the server and are never stored in integration records.
               </p>
               <form onSubmit={handleCreate} className="mt-5 grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1.5 text-sm font-medium">
@@ -163,15 +176,64 @@ export default function IntegrationsPage() {
                   />
                 </label>
                 <label className="grid gap-1.5 text-sm font-medium">
-                  Repository path
-                  <input
-                    required
-                    value={repoPath}
-                    onChange={(event) => setRepoPath(event.target.value)}
-                    placeholder="/workspace/examples/shopmock"
-                    className="rounded-md border border-neutral-300 bg-background px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700"
-                  />
+                  Provider
+                  <select
+                    value={provider}
+                    onChange={(event) => setProvider(event.target.value as Integration["provider"])}
+                    className="rounded-md border border-neutral-300 bg-background px-3 py-2 font-normal dark:border-neutral-700"
+                  >
+                    <option value="LOCAL">Local Git working tree</option>
+                    <option value="GITHUB_APP">GitHub App</option>
+                  </select>
                 </label>
+                {provider === "LOCAL" ? (
+                  <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
+                    Repository path
+                    <input
+                      required
+                      value={repoPath}
+                      onChange={(event) => setRepoPath(event.target.value)}
+                      placeholder="/workspace/examples/shopmock"
+                      className="rounded-md border border-neutral-300 bg-background px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700"
+                    />
+                  </label>
+                ) : (
+                  <>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Repository (owner/name)
+                      <input
+                        required
+                        pattern="[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
+                        value={githubRepository}
+                        onChange={(event) => setGithubRepository(event.target.value)}
+                        placeholder="acme/payments"
+                        className="rounded-md border border-neutral-300 bg-background px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700"
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      GitHub App installation ID
+                      <input
+                        required
+                        inputMode="numeric"
+                        pattern="[0-9]+"
+                        value={installationId}
+                        onChange={(event) => setInstallationId(event.target.value)}
+                        placeholder="12345678"
+                        className="rounded-md border border-neutral-300 bg-background px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700"
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm font-medium">
+                      Default branch
+                      <input
+                        required
+                        value={defaultBranch}
+                        onChange={(event) => setDefaultBranch(event.target.value)}
+                        placeholder="main"
+                        className="rounded-md border border-neutral-300 bg-background px-3 py-2 font-mono text-sm font-normal dark:border-neutral-700"
+                      />
+                    </label>
+                  </>
+                )}
                 <div className="sm:col-span-2">
                   <button
                     type="submit"
@@ -183,11 +245,9 @@ export default function IntegrationsPage() {
                 </div>
               </form>
               <p className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
-                Docker Compose: mount your repositories parent folder with{" "}
-                <code className="font-mono">REPOSITORIES_PATH</code> in{" "}
-                <code className="font-mono">.env</code>, then use the corresponding{" "}
-                <code className="font-mono">/workspace/…</code> path here. Only organization admins
-                can manage integrations.
+                Docker Compose: set <code className="font-mono">REPOSITORIES_PATH</code> for local
+                checkouts, or configure <code className="font-mono">GITHUB_APP_ID</code> and its
+                private key on the server. Only organization admins can manage integrations.
               </p>
             </section>
 
@@ -208,7 +268,9 @@ export default function IntegrationsPage() {
                     <div className="min-w-0">
                       <h3 className="font-medium">{integration.name}</h3>
                       <p className="mt-1 break-all font-mono text-xs text-neutral-500">
-                        {String(integration.config.repo_path ?? "Repository path unavailable")}
+                        {integration.provider === "LOCAL"
+                          ? String(integration.config.repo_path ?? "Repository path unavailable")
+                          : `${String(integration.config.repository)} · installation ${String(integration.config.installation_id)}`}
                       </p>
                     </div>
                     <div className="flex gap-2">

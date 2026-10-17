@@ -11,6 +11,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError
+from app.models.integration import Integration, IntegrationKind
 from app.models.ticket import Ticket, TicketEvent, TicketEventType, TicketPriority, TicketStatus
 from app.repositories.customers import CustomerRepository
 from app.repositories.tickets import TicketEventRepository, TicketPage, TicketRepository
@@ -44,6 +45,7 @@ class TicketService:
         organization_id: uuid.UUID,
         *,
         customer_id: uuid.UUID,
+        code_host_integration_id: uuid.UUID | None = None,
         created_by: uuid.UUID,
         title: str,
         description: str,
@@ -51,10 +53,23 @@ class TicketService:
     ) -> Ticket:
         if await self.customers.get(organization_id, customer_id) is None:
             raise NotFoundError("Customer not found.")
+        if code_host_integration_id is not None:
+            code_host = (
+                await self.db.execute(
+                    select(Integration).where(
+                        Integration.id == code_host_integration_id,
+                        Integration.organization_id == organization_id,
+                        Integration.kind == IntegrationKind.CODE_HOST,
+                    )
+                )
+            ).scalar_one_or_none()
+            if code_host is None:
+                raise NotFoundError("Code-host integration not found.")
 
         ticket = await self.tickets.create(
             organization_id=organization_id,
             customer_id=customer_id,
+            code_host_integration_id=code_host_integration_id,
             created_by=created_by,
             title=title,
             description=description,
@@ -65,10 +80,27 @@ class TicketService:
             ticket_id=ticket.id,
             actor_user_id=created_by,
             type=TicketEventType.CREATED,
-            payload={"title": title, "priority": priority.value},
+            payload={
+                "title": title,
+                "priority": priority.value,
+                "code_host_integration_id": (
+                    str(code_host_integration_id) if code_host_integration_id else None
+                ),
+            },
         )
         await self.db.commit()
         return ticket
+
+    async def list_code_host_options(self, organization_id: uuid.UUID) -> list[Integration]:
+        result = await self.db.execute(
+            select(Integration)
+            .where(
+                Integration.organization_id == organization_id,
+                Integration.kind == IntegrationKind.CODE_HOST,
+            )
+            .order_by(Integration.name)
+        )
+        return list(result.scalars().all())
 
     async def get_ticket(self, organization_id: uuid.UUID, ticket_id: uuid.UUID) -> Ticket:
         ticket = await self.tickets.get(organization_id, ticket_id)

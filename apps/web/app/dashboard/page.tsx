@@ -101,7 +101,7 @@ export default function DashboardPage() {
           {isAdmin && (
             <DashboardCard
               title="Repository integrations"
-              description="Connect local Git repositories used to collect source-code evidence."
+              description="Connect local or GitHub repositories used to collect source-code evidence."
               phase="Live"
               href="/integrations"
               cta="Manage repositories"

@@ -151,7 +151,7 @@ Versions get pinned in Phase 1 against the current releases at that time. The ma
 | DB driver | **psycopg 3** (async) | The LangGraph Postgres checkpointer uses psycopg, so using it for SQLAlchemy too means one driver. |
 | Database | PostgreSQL 17+ with pgvector ≥ 0.8 | HNSW indexes. Iterative index scans for filtered (tenant-scoped) vector search. |
 | Orchestration | LangGraph 1.x `StateGraph` + `AsyncPostgresSaver` checkpointer | `interrupt()` / `Command(resume=…)` for human approval gates |
-| LLM | Provider-agnostic `LLMClient` interface. Default implementation uses Anthropic Claude via the official `anthropic` SDK. | See [agent-architecture.md §7](agent-architecture.md#7-llm-layer) |
+| LLM | Provider-agnostic client boundary; the current optional implementation uses Gemini via the official `google-genai` SDK. | Live calls require `LLM_MODE=live`, `GEMINI_API_KEY`, and explicit `LLM_ALLOW_EXTERNAL_DATA=true`. |
 | Embeddings | `EmbeddingProvider` interface. Default: **local `fastembed`** (ONNX, `BAAI/bge-small-en-v1.5`, 384-dim). | No API key, no GPU, no PyTorch, deterministic. Anthropic has no embeddings endpoint. A hosted provider can be plugged in later. |
 | Tools | MCP (spec **2026-07-28**, official Python SDK) over streamable HTTP | Stateless protocol core, `outputSchema` / `structuredContent` |
 | Real-time UI | **Server-Sent Events** for investigation progress. The SSE endpoint polls the `investigation_events` table. | See ADR-001 D9. Simpler than WebSockets, and polling is simpler than LISTEN/NOTIFY. |
@@ -367,16 +367,16 @@ Each interface gets at least two adapters:
 
 | Interface | Local adapter (Phase 5–6) | Real adapter |
 |---|---|---|
-| CodeHost | local git repository (the shopmock repo with a seeded commit history) | GitHub REST (GitHub App installation token, fine-grained PAT for development) |
+| CodeHost | local git repository (the shopmock repo with a seeded commit history) | GitHub REST using short-lived GitHub App installation tokens |
 | LogSource | JSON-lines files / Postgres table emitted by shopmock | CloudWatch Logs, Loki, OpenSearch (later) |
 | DataSource | read-only role on the shopmock database | read replica with a read-only role |
 | DeploymentSource | deployments table + seeded release history | GitHub Deployments/Releases, CI metadata |
 
 MCP servers (Phase 7) wrap these interfaces, so each tool is vendor-neutral. For example, `search_logs` works the same against files and CloudWatch. Adapter selection is per organization, from the `integrations` table.
 
-**Default is fully local.** The demo runs end to end with the local adapters: a local git repository for code, a local "PR" record, and local logs, DB and deployment data. No accounts or tokens are needed.
+**Default is fully local.** The evidence demo runs with local adapters for source code, logs, database and deployment data. No hosted accounts or tokens are needed.
 
-**Real GitHub (optional):** set `GITHUB_TOKEN`, a fine-grained PAT restricted to one test repository with *contents: write* and *pull requests: write*, and the GitHub adapter is used instead, so real PRs get opened. A GitHub App (short-lived installation tokens, not tied to a person) is the documented upgrade path for multi-org production use, not built initially.
+**GitHub App (optional):** configure `GITHUB_APP_ID` and the private key as a deployment secret, then create an integration with its installation ID and repository. Installation tokens are minted per request. Contents read/write and Pull requests write permissions are required for all current adapter methods; PR calls remain denied by the ToolGateway until authorized with matching human approval. GitHub OAuth and GitLab are not implemented.
 
 ---
 
@@ -410,19 +410,20 @@ Escalation is a normal outcome, not an error. The UI shows *why*: which evidence
 
 ---
 
-## 11. Deployment (target architecture on AWS)
+## 11. Deployment
 
-| Component | AWS mapping |
+**Initial product target: self-hosted Docker Compose.** Operators own the host, database backups, TLS termination, upgrades and secret handling. Compose is suitable for a controlled demo or small trusted deployment; it is not a hardened multi-tenant production installation. In particular, per-investigation sandbox isolation and the complete approval-to-PR workflow are not implemented yet.
+
+| Component | Current self-hosted deployment |
 |---|---|
-| web, api, worker, tools | ECS Fargate services behind an ALB (web/api public, others private) |
-| sandbox-runner | Private ECS service that launches **one Fargate task per sandbox run** (Firecracker micro-VM isolation), no Docker socket |
-| postgres | RDS for PostgreSQL (pgvector supported), Multi-AZ, automated backups + PITR |
-| blobs | S3 (logs, diffs, artifacts) with lifecycle rules |
-| secrets | AWS Secrets Manager + KMS (envelope encryption for per-org integration secrets) |
-| observability | OTel Collector → Amazon Managed Prometheus / Grafana, or self-hosted |
-| CI/CD | GitHub Actions → ECR → ECS (OIDC-based AWS auth, no long-lived keys) |
+| web, api, worker, tools | Docker Compose services on the private Compose network |
+| postgres | PostgreSQL service with a persistent volume; operators must configure and test backups |
+| repository checkout | Read-only bind mount for local repository integrations |
+| GitHub App key | Environment secret or read-only mounted secret file, mounted only where needed |
+| sandbox-runner | Not yet implemented as an isolated execution service |
+| TLS / ingress | Operator-managed reverse proxy or load balancer |
 
-Locally, `docker compose` runs the same topology with Docker containers for sandboxes.
+AWS-managed services and more isolated sandbox execution are possible future deployment options, but are not the initial deployment target.
 
 ---
 
@@ -439,4 +440,4 @@ Locally, `docker compose` runs the same topology with Docker containers for sand
 
 Security (tenant isolation, audit, permission engine) and failure handling are designed in from the phase that introduces them. Phases 21 and 22 are hardening passes, not the first time those concerns appear.
 
-Recommendation: get a **thin vertical slice** (phases 5 → 9 on the coupon scenario, with local adapters) working and demonstrable before widening any single phase.
+The current implementation is an early vertical slice: local evidence collection with optional Gemini diagnosis and optional GitHub App code access. The roadmap remains aspirational; patch generation, isolated validation, persisted approval and the end-to-end PR path are not complete.

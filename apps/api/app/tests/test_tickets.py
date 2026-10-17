@@ -57,6 +57,43 @@ async def test_create_ticket_requires_existing_customer(db_client: AsyncClient):
     assert resp.status_code == 404
 
 
+async def test_ticket_repository_options_are_scoped_and_safe(db_client: AsyncClient):
+    await _register(db_client, "admin@repository-options.example", "RepositoryOptions")
+    integration = await db_client.post(
+        "/api/v1/integrations",
+        json={
+            "kind": "CODE_HOST",
+            "provider": "LOCAL",
+            "name": "Payments repo",
+            "config": {"repo_path": "/workspace"},
+        },
+        headers=CSRF_HEADERS,
+    )
+    assert integration.status_code == 201
+
+    response = await db_client.get("/api/v1/tickets/repositories")
+
+    assert response.status_code == 200
+    assert response.json() == [{"id": integration.json()["id"], "name": "Payments repo"}]
+
+
+async def test_ticket_rejects_nonexistent_repository_integration(db_client: AsyncClient):
+    await _register(db_client, "admin@invalidrepo.example", "InvalidRepo")
+    customer_id = await _create_customer(db_client)
+
+    response = await db_client.post(
+        "/api/v1/tickets",
+        json={
+            "customer_id": customer_id,
+            "code_host_integration_id": "00000000-0000-7000-8000-000000000000",
+            "title": "Wrong repository",
+        },
+        headers=CSRF_HEADERS,
+    )
+
+    assert response.status_code == 404
+
+
 async def test_viewer_cannot_create_ticket(db_app):
     admin = new_client(db_app)
     await _register(admin, "admin@viewerticket.example", "ViewerTicketCo")

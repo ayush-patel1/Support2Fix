@@ -9,6 +9,7 @@ from app.models.ticket import TicketEventType, TicketPriority, TicketStatus
 
 class TicketCreate(BaseModel):
     customer_id: uuid.UUID
+    code_host_integration_id: uuid.UUID | None = None
     title: str = Field(min_length=1, max_length=300)
     description: str = Field(default="", max_length=10_000)
     priority: TicketPriority = TicketPriority.MEDIUM
@@ -33,6 +34,7 @@ class TicketPublic(BaseModel):
 
     id: uuid.UUID
     customer_id: uuid.UUID
+    code_host_integration_id: uuid.UUID | None
     created_by: uuid.UUID | None
     title: str
     description: str
@@ -45,6 +47,11 @@ class TicketPublic(BaseModel):
 class TicketListResponse(BaseModel):
     items: list[TicketPublic]
     next_cursor: str | None
+
+
+class TicketRepositoryOption(BaseModel):
+    id: uuid.UUID
+    name: str
 
 
 class TicketEventPublic(BaseModel):

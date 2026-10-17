@@ -10,8 +10,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.diagnosis import (
+    Diagnosis,
+    DiagnosisClient,
+    DiagnosisProviderError,
+    GeminiDiagnosisClient,
+)
+from app.core.config import Settings, get_settings
 from app.core.errors import NotFoundError
-from app.mcp.gateway import GatewayCallResult, GatewayContext, ToolGateway
+from app.mcp.gateway import GatewayCallResult, GatewayContext, ToolGateway, redact_sensitive
 from app.models.integration import Integration, IntegrationKind
 from app.models.investigation import (
     Investigation,
@@ -112,12 +119,115 @@ def _candidate(
                 "path": match.get("path"),
                 "line_number": match.get("line_number"),
                 "evidence_ids": [
-                    str(value)
-                    for value in (log_evidence_id, code_evidence_id)
-                    if value is not None
+                    str(value) for value in (log_evidence_id, code_evidence_id) if value is not None
                 ],
             }
     return None
+
+
+def _configured_diagnosis_client(settings: Settings) -> tuple[DiagnosisClient | None, str | None]:
+    if settings.llm_mode != "live":
+        return None, None
+    if not settings.llm_allow_external_data:
+        return None, (
+            "AI diagnosis was skipped: set LLM_ALLOW_EXTERNAL_DATA=true to permit sending "
+            "redacted ticket and evidence data to the configured Gemini API."
+        )
+    if not settings.gemini_api_key:
+        return None, "AI diagnosis was skipped: GEMINI_API_KEY is not configured."
+    return (
+        GeminiDiagnosisClient(api_key=settings.gemini_api_key, model=settings.llm_model),
+        None,
+    )
+
+
+def _diagnosis_evidence(
+    *,
+    log_entries: list[Any],
+    deployment_data: list[Any],
+    commit_data: list[Any],
+    code_matches: list[Any],
+    log_evidence_id: uuid.UUID,
+    code_evidence_ids: list[uuid.UUID],
+) -> dict[str, object]:
+    return {
+        "log_evidence_id": str(log_evidence_id),
+        "logs": [
+            {
+                key: value
+                for key, value in item.items()
+                if key in {"timestamp", "level", "service", "message"}
+            }
+            for item in log_entries[:20]
+            if isinstance(item, dict)
+        ],
+        "deployment_evidence": deployment_data[:10],
+        "commit_evidence": commit_data[:10],
+        "code_search_evidence_ids": [str(value) for value in code_evidence_ids],
+        "code_matches": code_matches[:20],
+    }
+
+
+def _select_code_host(
+    integrations: list[Integration], selected_id: uuid.UUID | None
+) -> tuple[Integration | None, str | None]:
+    code_hosts = [item for item in integrations if item.kind == IntegrationKind.CODE_HOST]
+    if selected_id is not None:
+        selected = next((item for item in code_hosts if item.id == selected_id), None)
+        if selected is None:
+            return None, "The ticket's selected code-host integration is unavailable."
+        return selected, None
+    if len(code_hosts) == 1:
+        return code_hosts[0], None
+    if len(code_hosts) > 1:
+        return None, "Multiple code-host integrations are configured; select one on the ticket."
+    return None, None
+
+
+def _ground_diagnosis(
+    diagnosis: Diagnosis,
+    *,
+    log_evidence_id: uuid.UUID,
+    code_evidence_ids: list[uuid.UUID],
+    log_entries: list[Any],
+    code_matches: list[Any],
+) -> dict[str, Any]:
+    cited_ids = set(diagnosis.evidence_ids)
+    if any(value not in {log_evidence_id, *code_evidence_ids} for value in cited_ids):
+        raise ValueError("Diagnosis cited an evidence ID that was not collected for this run.")
+    if log_evidence_id not in cited_ids or not cited_ids.intersection(code_evidence_ids):
+        raise ValueError("Diagnosis must cite collected log evidence and code-search evidence.")
+
+    signature_in_logs = any(
+        isinstance(item, dict)
+        and isinstance(item.get("message"), str)
+        and diagnosis.signature in item["message"]
+        for item in log_entries
+    )
+    source_match = next(
+        (
+            item
+            for item in code_matches
+            if isinstance(item, dict)
+            and item.get("path") == diagnosis.path
+            and item.get("line_number") == diagnosis.line_number
+            and isinstance(item.get("line"), str)
+            and diagnosis.signature in item["line"]
+        ),
+        None,
+    )
+    if not signature_in_logs or source_match is None:
+        raise ValueError("Diagnosis signature and source location must match collected evidence.")
+    return {
+        "classification": "HYPOTHESIS",
+        "summary": (
+            f"{diagnosis.summary} This is an AI-assisted hypothesis, not a confirmed root cause."
+        ),
+        "signature": diagnosis.signature,
+        "path": diagnosis.path,
+        "line_number": diagnosis.line_number,
+        "evidence_ids": [str(value) for value in diagnosis.evidence_ids],
+    }
 
 
 async def collect_investigation(
@@ -167,7 +277,16 @@ async def collect_investigation(
         )
         integration_ids: dict[IntegrationKind, uuid.UUID] = {}
         for integration in integrations:
-            integration_ids.setdefault(integration.kind, integration.id)
+            if integration.kind != IntegrationKind.CODE_HOST:
+                integration_ids.setdefault(integration.kind, integration.id)
+        initial_evidence_gaps: list[str] = []
+        code_host, code_host_gap = _select_code_host(
+            integrations, ticket.code_host_integration_id
+        )
+        if code_host is not None:
+            integration_ids[IntegrationKind.CODE_HOST] = code_host.id
+        elif code_host_gap is not None:
+            initial_evidence_gaps.append(code_host_gap)
 
         investigation.status = InvestigationStatus.RUNNING
         investigation.started_at = datetime.now(UTC)
@@ -189,7 +308,7 @@ async def collect_investigation(
             investigation_id=investigation.id,
         )
         evidence_ids: dict[str, uuid.UUID] = {}
-        evidence_gaps: list[str] = []
+        evidence_gaps = initial_evidence_gaps
         results: dict[str, GatewayCallResult] = {}
 
         calls: list[tuple[str, dict[str, Any], str]] = []
@@ -203,7 +322,7 @@ async def collect_investigation(
             evidence_gaps.append("No deployment-source integration is configured.")
         if IntegrationKind.CODE_HOST in integration_ids:
             calls.append(("code.list_commits", {"limit": 20}, "commits"))
-        else:
+        elif code_host_gap is None:
             evidence_gaps.append("No code-host integration is configured.")
 
         for tool_name, arguments, result_key in calls:
@@ -230,20 +349,19 @@ async def collect_investigation(
         log_entries = _as_list(results["logs"].data) if "logs" in results else []
         candidate = None
         code_evidence_ids: list[uuid.UUID] = []
+        code_matches: list[Any] = []
         if IntegrationKind.CODE_HOST in integration_ids:
             for signature in _error_signatures(log_entries):
                 code_result = await gateway.call_tool(
                     "code.search_code", {"query": signature, "limit": 20}, context
                 )
-                if (
-                    code_result.decision.value != "ALLOW"
-                    or code_result.evidence_id is None
-                ):
+                if code_result.decision.value != "ALLOW" or code_result.evidence_id is None:
                     evidence_gaps.append(f"code.search_code ({signature}): {code_result.reason}")
                     continue
 
                 code_evidence_ids.append(code_result.evidence_id)
-                code_matches = _as_list(code_result.data)
+                matches = _as_list(code_result.data)
+                code_matches.extend(matches)
                 async with session_factory() as event_db:
                     current = await event_db.get(Investigation, investigation.id)
                     if current is not None:
@@ -269,6 +387,43 @@ async def collect_investigation(
                 )
                 if candidate is not None:
                     break
+
+        diagnosis_client, diagnosis_skip_reason = _configured_diagnosis_client(get_settings())
+        if diagnosis_skip_reason is not None:
+            evidence_gaps.append(diagnosis_skip_reason)
+        elif diagnosis_client is not None:
+            log_evidence_id = evidence_ids.get("logs")
+            if log_evidence_id is None or not code_evidence_ids or not code_matches:
+                evidence_gaps.append(
+                    "AI diagnosis was skipped: both log and matching source-code evidence are "
+                    "required."
+                )
+            else:
+                evidence = _diagnosis_evidence(
+                    log_entries=log_entries,
+                    deployment_data=(
+                        _as_list(results["deployments"].data) if "deployments" in results else []
+                    ),
+                    commit_data=(_as_list(results["commits"].data) if "commits" in results else []),
+                    code_matches=code_matches,
+                    log_evidence_id=log_evidence_id,
+                    code_evidence_ids=code_evidence_ids,
+                )
+                try:
+                    diagnosis = await diagnosis_client.diagnose(
+                        ticket_title=str(redact_sensitive(ticket.title)),
+                        ticket_description=str(redact_sensitive(ticket.description)),
+                        evidence=evidence,
+                    )
+                    candidate = _ground_diagnosis(
+                        diagnosis,
+                        log_evidence_id=log_evidence_id,
+                        code_evidence_ids=code_evidence_ids,
+                        log_entries=log_entries,
+                        code_matches=code_matches,
+                    )
+                except (DiagnosisProviderError, ValueError) as exc:
+                    evidence_gaps.append(f"AI diagnosis unavailable: {exc}")
 
         total_evidence_count = len(evidence_ids) + len(code_evidence_ids)
         configured_count = len(calls) + int(bool(code_evidence_ids))

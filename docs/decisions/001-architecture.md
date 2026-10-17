@@ -7,11 +7,11 @@
 
 ## Context
 
-Support2Fix must turn support tickets into evidence-backed investigations, reproductions, validated fixes and human-approved PRs. It has to be secure against untrusted input (tickets, logs, code), tenant-isolated, explainable and demonstrable locally with Docker Compose. It also has to be deployable on AWS.
+Support2Fix is intended to turn support tickets into evidence-backed investigations, reproductions, validated fixes and human-approved PRs. It has to be secure against untrusted input (tickets, logs, code), tenant-isolated, explainable and demonstrable locally with Docker Compose. The initial product deployment target is self-hosted; managed cloud deployments may be considered later.
 
 Constraints:
 
-- Stack is limited to TypeScript/Next.js/React/Tailwind, Python/FastAPI/Pydantic/SQLAlchemy, LangGraph, MCP, PostgreSQL/pgvector, Docker, GitHub Actions, AWS-compatible infrastructure.
+- Stack is limited to TypeScript/Next.js/React/Tailwind, Python/FastAPI/Pydantic/SQLAlchemy, LangGraph (planned orchestration), MCP, PostgreSQL/pgvector, Docker and GitHub Actions.
 - Start as a modular monolith. Build incrementally in 25 phases, each runnable and tested.
 - Never fabricate evidence, integrations or metrics.
 
@@ -55,11 +55,11 @@ Tool results are stored as immutable, hashed evidence. Model claims are typed FA
 - *Alternatives:* relying on prompt instructions such as "only state facts". That isn't verifiable and fails silently.
 - *Trade-off:* more structure in outputs means more tokens and occasional valid claims downgraded because of quote mismatches. Acceptable, and tunable (whitespace normalization, fuzzy-match threshold for display only).
 
-### D6. Provider-agnostic LLM interface, with Anthropic Claude as the default implementation
+### D6. Provider-agnostic LLM interface
 
-`LLMClient` wraps the official `anthropic` Python SDK. Default model is `claude-opus-5` with adaptive thinking. Per-node model and effort are configurable. Node outputs come through structured outputs (`messages.parse` + Pydantic), and tool inputs are schema-valid via `strict: true` tools. Prompts are cached, refusals handled explicitly, and long generations streamed. `FakeLLMClient` covers tests. `ReplayLLMClient` gives a deterministic demo (clearly labelled, never used for metrics).
+The reasoning boundary is provider-neutral. The current optional implementation uses the official Google `google-genai` SDK and Gemini structured JSON outputs. `LLM_MODE=fake` remains the default. Live requests require `GEMINI_API_KEY` and the explicit `LLM_ALLOW_EXTERNAL_DATA=true` consent setting; redacted ticket/evidence content is sent to Google only after that setting is enabled. `FakeLLMClient` covers tests. Other providers can be added behind the same boundary.
 
-- `LLM_MODE=live|replay|fake`. Without an API key the app still runs, and investigations report "LLM not configured" instead of producing fake output.
+- `LLM_MODE=live|replay|fake`. The evidence collector continues without live AI and records an evidence gap if provider configuration or external-data consent is missing.
 - Cheaper per-node models are to be decided from Phase 20 evaluation data.
 
 ### D7. Separate embedding provider behind an interface
@@ -98,7 +98,7 @@ Explicit choices to keep the project easy to run and reason about. Each can be u
 
 | Area | Simple default | Upgrade path (only if measured need) |
 |---|---|---|
-| Code host | Local git repo adapter; real GitHub when `GITHUB_TOKEN` (fine-grained PAT) is set | GitHub App |
+| Code host | Local git repo or GitHub App adapter | GitHub App installation per repository |
 | Job wakeup / live updates | Polling (≈1 s) | `LISTEN/NOTIFY` |
 | Large artifacts | Capped `text` columns in Postgres | S3 object store |
 | Tenant isolation | Scoped repositories + composite FKs + tests | Postgres RLS |
@@ -135,8 +135,8 @@ Support2Fix is its **own git repository** rooted at this directory. The enclosin
 
 | Question | Decision |
 |---|---|
-| LLM provider | Anthropic Claude (`claude-opus-5`) via the official SDK. `ANTHROPIC_API_KEY` in `.env` for live mode. Replay/fake modes work without a key. |
+| LLM provider | Provider-neutral interface; first live implementation is Gemini. Fake mode remains the offline default; live data egress requires explicit consent. |
 | Embedding provider | Local `fastembed` (bge-small-en-v1.5, 384-dim) |
-| GitHub for PR demo | Local git adapter by default. Optional fine-grained PAT (`GITHUB_TOKEN`) on a dedicated test repo for real PRs. |
+| GitHub access | GitHub App installation tokens; PEM private key supplied through a local secret file or private environment variable. PR tool policy still requires matching human approval. |
 | Docker | Required from Phase 1 (Docker Desktop, WSL2 backend). Must be installed by the owner, since it needs admin rights and a restart. |
 | Git repository | `git init` in the project directory, with a `.gitignore` that excludes secrets and build output |

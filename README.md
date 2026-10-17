@@ -2,7 +2,7 @@
 
 Support2Fix is an AI platform that turns a customer support issue into an evidence-backed engineering investigation. The flow runs: root cause → reproduction → validated fix → human-approved pull request → customer response.
 
-> **Status: working local evidence-investigation vertical slice.** The app includes authentication and tenant isolation (Phase 2), tickets and customer context (Phases 3–4), local integration adapters (Phase 6), MCP tools and a policy-enforcing ToolGateway (Phases 7–8), and a persistent investigation queue, worker, evidence collection, and live investigation view (a useful subset of Phase 9–10). The collector returns a source-backed **hypothesis**, never a confirmed root cause. Later roadmap features—including a LangGraph/LLM reasoning agent, isolated reproduction, patch generation/validation, approvals and PR creation, RAG, and production hardening—are not implemented. See [system-design.md §12](docs/architecture/system-design.md#12-phase-roadmap-and-dependency-order).
+> **Status: self-hosted evidence-investigation vertical slice.** The app includes authentication and tenant isolation (Phase 2), tickets and customer context (Phases 3–4), local adapters and a GitHub App code-host adapter, MCP tools and a policy-enforcing ToolGateway (Phases 6–8), and a persistent evidence-collection worker (a useful subset of Phases 9–10). An optional Gemini integration provides a source-validated hypothesis only when the operator explicitly enables external-data sharing. The complete durable reasoning graph, isolated reproduction, patch generation/validation, human approval workflow, approval-bound PR execution, RAG, and production operations are not implemented. See [system-design.md §12](docs/architecture/system-design.md#12-phase-roadmap-and-dependency-order).
 
 ## Architecture documents
 
@@ -69,6 +69,18 @@ The first `docker compose up --build` applies migrations.
 
 The demo account is created only by this explicit command and only outside
 production. Keep the password local; do not use it for a real account.
+
+#### Optional live AI diagnosis
+
+The worker can enrich source-matched hypotheses using Gemini. It remains in
+`LLM_MODE=fake` unless explicitly configured. To opt into sending redacted
+ticket text and collected evidence to Google, set `LLM_MODE=live`,
+`GEMINI_API_KEY`, and `LLM_ALLOW_EXTERNAL_DATA=true` in the private `.env`.
+The worker checks that consent flag before making any provider request,
+redacts emails and bearer credentials, bounds the evidence payload, and
+validates every cited evidence ID and source location before displaying the
+result. Without the explicit flag, diagnosis is skipped and recorded as an
+evidence gap; there is no silent provider fallback.
 
 ### Option B — Run the apps directly (no Docker)
 
@@ -183,9 +195,9 @@ Customer → Environment → Service → {Repository, Deployment}. Every child t
 
 ### Integrations (Phase 6)
 
-An `Integration` row is `(kind, provider, name, config)` — `kind` is one of the five interfaces in [system-design.md §8](docs/architecture/system-design.md); `provider` is `LOCAL` for now (the only adapters built so far — real vendor adapters like GitHub land from Phase 15 onward). `config` holds whatever that adapter needs to connect (a filesystem path, a database URL); it never holds a secret — `secret_ref` is reserved for that, for providers that need one. Config is validated on create/update by actually building the adapter (`app/integrations/registry.py`), so a bad path or an unsupported provider is a `400 invalid_config`, not a surprise at first use.
+An `Integration` row is `(kind, provider, name, config)` — `kind` is one of the five interfaces in [system-design.md §8](docs/architecture/system-design.md). `LOCAL` is implemented for local code, log, deployment, and data sources; `GITHUB_APP` is implemented for the code host. Config contains connection metadata (never the GitHub private key), and is validated by building the adapter (`app/integrations/registry.py`).
 
-Organization admins can manage local Git integrations in the **Integrations** page. Enter an absolute path to a Git working tree, test the connection, and disconnect it from that page. With Docker Compose, `REPOSITORIES_PATH` in `.env` selects the host directory mounted read-only at `/workspace` in the API, tools, and worker containers. For example, the default `REPOSITORIES_PATH=.` lets you connect the demo repo at `/workspace/examples/shopmock`; to connect repos elsewhere, set it to their shared parent directory and use the matching `/workspace/<repo>` path in the UI. When running the apps directly on the host, use a path visible to all three processes. This currently connects checked-out local repositories only; hosted GitHub/GitLab URLs and OAuth are not implemented.
+Organization admins can manage local Git and GitHub App integrations in the **Integrations** page. Local Git requires an absolute path to a working tree. With Docker Compose, `REPOSITORIES_PATH` in `.env` selects the host directory mounted read-only at `/workspace` in API, tools, and worker containers; the default `.` lets you connect the demo repo at `/workspace/examples/shopmock`. GitHub App integrations take an `owner/repository` name and installation ID. Configure `GITHUB_APP_ID` and place the PEM at `secrets/github-app-private-key.pem` (or provide it through a private environment variable); Compose mounts the ignored `secrets/` directory read-only into only API and tools. The key is withheld from worker and web containers. Limit the app installation to intended repositories and grant Contents read/write and Pull requests write permissions. GitHub access tokens are minted per request and never stored in integration config. The adapter can read repository contents, create `support2fix/` branches, and open pull requests; the latter remains blocked by ToolGateway policy unless matching human approval is supplied. GitHub OAuth user login and GitLab are not implemented.
 
 | Endpoint | Who | Notes |
 |---|---|---|

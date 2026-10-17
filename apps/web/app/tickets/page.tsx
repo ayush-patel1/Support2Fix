@@ -8,10 +8,12 @@ import {
   ApiError,
   type Customer,
   createTicket,
+  listTicketRepositories,
   listCustomers,
   listTickets,
   type Ticket,
   type TicketPriority,
+  type TicketRepositoryOption,
   type TicketStatus,
 } from "@/lib/api";
 import { useAuthGuard } from "@/lib/useAuthGuard";
@@ -31,6 +33,8 @@ export default function TicketsPage() {
   const { me, loading: authLoading } = useAuthGuard();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [repositories, setRepositories] = useState<TicketRepositoryOption[]>([]);
+  const [repositoryError, setRepositoryError] = useState<string | null>(null);
   const [status, setStatus] = useState<TicketStatus | "">("");
   const [priority, setPriority] = useState<TicketPriority | "">("");
   const [search, setSearch] = useState("");
@@ -75,6 +79,15 @@ export default function TicketsPage() {
     listCustomers()
       .then(setCustomers)
       .catch(() => setCustomers([]));
+    listTicketRepositories()
+      .then(setRepositories)
+      .catch((err: unknown) =>
+        setRepositoryError(
+          err instanceof ApiError
+            ? (err.detail ?? err.message)
+            : "Failed to load repository options.",
+        ),
+      );
   }, []);
 
   const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? id.slice(0, 8);
@@ -98,6 +111,8 @@ export default function TicketsPage() {
         {showForm && (
           <NewTicketForm
             customers={customers}
+            repositories={repositories}
+            repositoryError={repositoryError}
             onCreated={(ticket) => {
               setTickets((prev) => [ticket, ...prev]);
               setShowForm(false);
@@ -154,7 +169,12 @@ export default function TicketsPage() {
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{ticket.title}</p>
-                <p className="text-xs text-neutral-500">{customerName(ticket.customer_id)}</p>
+                <p className="text-xs text-neutral-500">
+                  {customerName(ticket.customer_id)}
+                  {ticket.code_host_integration_id
+                    ? ` · ${repositoryName(ticket.code_host_integration_id, repositories)}`
+                    : ""}
+                </p>
               </div>
               <PriorityBadge priority={ticket.priority} />
               <StatusBadge status={ticket.status} />
@@ -176,19 +196,32 @@ export default function TicketsPage() {
   );
 }
 
+function repositoryName(id: string, repositories: TicketRepositoryOption[]): string {
+  return repositories.find((repository) => repository.id === id)?.name ?? "Repository unavailable";
+}
+
 function NewTicketForm({
   customers,
+  repositories,
+  repositoryError,
   onCreated,
 }: {
   customers: Customer[];
+  repositories: TicketRepositoryOption[];
+  repositoryError: string | null;
   onCreated: (ticket: Ticket) => void;
 }) {
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
+  const [repositoryId, setRepositoryId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TicketPriority>("MEDIUM");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (repositories.length === 1) setRepositoryId(repositories[0].id);
+  }, [repositories]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -196,10 +229,20 @@ function NewTicketForm({
       setError("Create a customer first — a ticket must belong to one.");
       return;
     }
+    if (repositories.length > 1 && !repositoryId) {
+      setError("Select the repository this ticket belongs to.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const ticket = await createTicket({ customer_id: customerId, title, description, priority });
+      const ticket = await createTicket({
+        customer_id: customerId,
+        code_host_integration_id: repositoryId || undefined,
+        title,
+        description,
+        priority,
+      });
       onCreated(ticket);
     } catch (err) {
       setError(err instanceof ApiError ? (err.detail ?? err.message) : "Failed to create ticket.");
@@ -233,6 +276,25 @@ function NewTicketForm({
             </option>
           ))}
         </select>
+      )}
+      {repositories.length > 0 && (
+        <select
+          value={repositoryId}
+          onChange={(e) => setRepositoryId(e.target.value)}
+          required={repositories.length > 1}
+          className="rounded-md border border-neutral-300 bg-background px-3 py-1.5 text-sm dark:border-neutral-700"
+          aria-label="Repository"
+        >
+          {repositories.length > 1 && <option value="">Select repository</option>}
+          {repositories.map((repository) => (
+            <option key={repository.id} value={repository.id}>
+              {repository.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {repositoryError && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{repositoryError}</p>
       )}
       <input
         value={title}

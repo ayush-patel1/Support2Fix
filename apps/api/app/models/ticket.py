@@ -10,16 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import (
-    DateTime,
-    Enum,
-    ForeignKey,
-    ForeignKeyConstraint,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import DateTime, Enum, ForeignKey, ForeignKeyConstraint, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -59,6 +50,11 @@ class Ticket(Base):
             ["customers.id", "customers.organization_id"],
             ondelete="RESTRICT",  # don't let a customer vanish out from under open tickets
         ),
+        ForeignKeyConstraint(
+            ["code_host_integration_id", "organization_id"],
+            ["integrations.id", "integrations.organization_id"],
+            ondelete="SET NULL (code_host_integration_id)",
+        ),
         UniqueConstraint("id", "organization_id", name="uq_tickets_id_org"),
     )
 
@@ -67,6 +63,9 @@ class Ticket(Base):
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    code_host_integration_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
