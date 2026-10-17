@@ -20,6 +20,7 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationEventType,
     InvestigationStatus,
+    PullRequest,
     Reproduction,
     ReproductionStatus,
     ValidationRun,
@@ -39,6 +40,8 @@ from app.schemas.investigation import (
     InvestigationDetail,
     InvestigationPublic,
     InvestigationTimelineItem,
+    PullRequestCreate,
+    PullRequestPublic,
     ReproductionPublic,
     ValidationRunPublic,
 )
@@ -415,15 +418,22 @@ class InvestigationService:
 
         proposals = await self.investigations.list_fix_proposals(organization_id, investigation_id)
         approvals = await self.investigations.list_approvals(organization_id, investigation_id)
+        pull_requests = await self.investigations.list_pull_requests(organization_id, investigation_id)
         approvals_by_proposal: dict[uuid.UUID, list[ApprovalPublic]] = {}
+        pull_requests_by_proposal: dict[uuid.UUID, list[PullRequestPublic]] = {}
         for approval in approvals:
             approvals_by_proposal.setdefault(approval.fix_proposal_id, []).append(
                 ApprovalPublic.model_validate(approval)
+            )
+        for pr in pull_requests:
+            pull_requests_by_proposal.setdefault(pr.fix_proposal_id, []).append(
+                PullRequestPublic.model_validate(pr)
             )
         output: list[FixProposalPublic] = []
         for proposal in proposals:
             item = FixProposalPublic.model_validate(proposal)
             item.approvals = approvals_by_proposal.get(proposal.id, [])
+            item.pull_requests = pull_requests_by_proposal.get(proposal.id, [])
             output.append(item)
         return output
 
@@ -475,6 +485,59 @@ class InvestigationService:
             raise NotFoundError("Investigation not found.")
         approvals = await self.investigations.list_approvals(organization_id, investigation_id)
         return [ApprovalPublic.model_validate(approval) for approval in approvals]
+
+    async def add_pull_request(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        *,
+        payload: PullRequestCreate,
+    ) -> PullRequestPublic:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        proposal = await self.db.get(FixProposal, payload.fix_proposal_id)
+        if proposal is None or proposal.organization_id != organization_id:
+            raise NotFoundError("Fix proposal not found.")
+        if proposal.investigation_id != investigation_id:
+            raise ConflictError("Fix proposal does not belong to the investigation.")
+        if proposal.status != FixProposalStatus.VALIDATED:
+            raise ConflictError("Fix proposal must be validated before creating a pull request.")
+
+        pr = await self.investigations.create_pull_request(
+            organization_id=organization_id,
+            fix_proposal_id=proposal.id,
+            provider=payload.provider,
+            number=payload.number,
+            url=payload.url,
+            branch=payload.branch,
+            state=payload.state,
+            title=payload.title,
+        )
+        await self.db.commit()
+        return PullRequestPublic.model_validate(pr)
+
+    async def list_pull_requests(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        *,
+        fix_proposal_id: uuid.UUID | None = None,
+    ) -> list[PullRequestPublic]:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+        if fix_proposal_id is not None:
+            proposal = await self.db.get(FixProposal, fix_proposal_id)
+            if proposal is None or proposal.organization_id != organization_id:
+                raise NotFoundError("Fix proposal not found.")
+            if proposal.investigation_id != investigation_id:
+                raise ConflictError("Fix proposal does not belong to the investigation.")
+        prs = await self.investigations.list_pull_requests(
+            organization_id,
+            investigation_id,
+            fix_proposal_id=fix_proposal_id,
+        )
+        return [PullRequestPublic.model_validate(pr) for pr in prs]
 
     async def list_events(
         self, organization_id: uuid.UUID, investigation_id: uuid.UUID

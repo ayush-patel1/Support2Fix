@@ -20,6 +20,8 @@ from app.schemas.investigation import (
     InvestigationEventPublic,
     InvestigationPublic,
     ClaimPublic,
+    PullRequestCreate,
+    PullRequestPublic,
     ReproductionPublic,
     ValidationRunPublic,
 )
@@ -262,6 +264,73 @@ async def create_investigation_approval(
         ctx.organization_id,
         investigation_id,
         ctx.user_id,
+        payload=body,
+    )
+
+
+@router.get(
+    "/investigations/{investigation_id}/pull-requests",
+    response_model=list[PullRequestPublic],
+)
+async def list_investigation_pull_requests(
+    investigation_id: UUID,
+    ctx: OrgContext = Depends(get_org_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[PullRequestPublic]:
+    return await InvestigationService(db).list_pull_requests(ctx.organization_id, investigation_id)
+
+
+@router.post(
+    "/investigations/{investigation_id}/pull-requests",
+    response_model=PullRequestPublic,
+    status_code=201,
+)
+async def create_investigation_pull_request(
+    investigation_id: UUID,
+    body: PullRequestCreate,
+    ctx: OrgContext = Depends(require_any_role(Role.ENGINEER, Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> PullRequestPublic:
+    return await InvestigationService(db).add_pull_request(
+        ctx.organization_id,
+        investigation_id,
+        payload=body,
+    )
+
+
+@router.get(
+    "/investigations/{investigation_id}/fix-proposals/{fix_proposal_id}/pull-requests",
+    response_model=list[PullRequestPublic],
+)
+async def list_fix_proposal_pull_requests(
+    investigation_id: UUID,
+    fix_proposal_id: UUID,
+    ctx: OrgContext = Depends(get_org_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[PullRequestPublic]:
+    return await InvestigationService(db).list_pull_requests(
+        ctx.organization_id,
+        investigation_id,
+        fix_proposal_id=fix_proposal_id,
+    )
+
+
+@router.post(
+    "/investigations/{investigation_id}/fix-proposals/{fix_proposal_id}/pull-requests",
+    response_model=PullRequestPublic,
+    status_code=201,
+)
+async def create_fix_proposal_pull_request(
+    investigation_id: UUID,
+    fix_proposal_id: UUID,
+    body: PullRequestCreate,
+    ctx: OrgContext = Depends(require_any_role(Role.ENGINEER, Role.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> PullRequestPublic:
+    body.fix_proposal_id = fix_proposal_id
+    return await InvestigationService(db).add_pull_request(
+        ctx.organization_id,
+        investigation_id,
         payload=body,
     )
 

@@ -78,6 +78,12 @@ class ApprovalDecision(enum.StrEnum):
     REJECTED = "REJECTED"
 
 
+class PullRequestState(enum.StrEnum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+    MERGED = "MERGED"
+
+
 class Investigation(Base):
     __tablename__ = "investigations"
     __table_args__ = (
@@ -311,6 +317,36 @@ class Approval(Base):
     )
     diff_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PullRequest(Base):
+    __tablename__ = "pull_requests"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["fix_proposal_id", "organization_id"],
+            ["fix_proposals.id", "fix_proposals.organization_id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("id", "organization_id", name="uq_pull_requests_id_org"),
+        Index("ix_pull_requests_fix_proposal_created", "fix_proposal_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    fix_proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("fix_proposals.id", ondelete="CASCADE"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(32), default="github")
+    number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    state: Mapped[PullRequestState] = mapped_column(
+        Enum(PullRequestState, name="pull_request_state"), default=PullRequestState.OPEN
+    )
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

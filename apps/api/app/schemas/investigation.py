@@ -11,6 +11,7 @@ from app.models.investigation import (
     FixProposalStatus,
     InvestigationEventType,
     InvestigationStatus,
+    PullRequestState,
     ReproductionStatus,
     ValidationStatus,
 )
@@ -119,6 +120,30 @@ class ApprovalCreate(BaseModel):
     comment: str | None = None
 
 
+class PullRequestPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    fix_proposal_id: uuid.UUID
+    provider: str = "github"
+    number: int | None = None
+    url: str | None = None
+    branch: str | None = None
+    state: PullRequestState = PullRequestState.OPEN
+    title: str | None = None
+    created_at: datetime
+
+
+class PullRequestCreate(BaseModel):
+    fix_proposal_id: uuid.UUID
+    provider: str = "github"
+    number: int | None = None
+    url: str | None = None
+    branch: str | None = None
+    state: PullRequestState = PullRequestState.OPEN
+    title: str | None = None
+
+
 class FixProposalCreate(BaseModel):
     reproduction_id: uuid.UUID | None = None
     diff: str | None = None
@@ -144,6 +169,7 @@ class FixProposalPublic(BaseModel):
     files_changed: list[str]
     tests_added: list[str]
     approvals: list[ApprovalPublic] = Field(default_factory=list)
+    pull_requests: list[PullRequestPublic] = Field(default_factory=list)
     created_at: datetime
 
 

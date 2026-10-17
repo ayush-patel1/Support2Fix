@@ -14,6 +14,7 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationJob,
     InvestigationStatus,
+    PullRequest,
     Reproduction,
     ValidationRun,
 )
@@ -177,4 +178,27 @@ class InvestigationRepository:
             )
             .order_by(Approval.created_at, Approval.id)
         )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def create_pull_request(self, **fields: object) -> PullRequest:
+        pr = PullRequest(**fields)
+        self.db.add(pr)
+        await self.db.flush()
+        return pr
+
+    async def list_pull_requests(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID | None = None,
+        *,
+        fix_proposal_id: uuid.UUID | None = None,
+    ) -> list[PullRequest]:
+        stmt = select(PullRequest).where(PullRequest.organization_id == organization_id)
+        if investigation_id is not None:
+            stmt = stmt.join(FixProposal, FixProposal.id == PullRequest.fix_proposal_id).where(
+                FixProposal.investigation_id == investigation_id
+            )
+        if fix_proposal_id is not None:
+            stmt = stmt.where(PullRequest.fix_proposal_id == fix_proposal_id)
+        stmt = stmt.order_by(PullRequest.created_at, PullRequest.id)
         return list((await self.db.execute(stmt)).scalars().all())
