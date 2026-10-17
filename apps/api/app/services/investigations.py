@@ -8,19 +8,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError
 from app.models.investigation import (
+    Approval,
+    ApprovalDecision,
+    Claim,
+    ClaimEvidence,
+    ClaimKind,
+    ClaimStatus,
+    FixProposal,
+    FixProposalStatus,
     Investigation,
     InvestigationEvent,
     InvestigationEventType,
     InvestigationStatus,
+    Reproduction,
+    ReproductionStatus,
+    ValidationRun,
+    ValidationStatus,
 )
 from app.models.ticket import Ticket, TicketEvent, TicketEventType, TicketStatus
 from app.models.tool_call import Evidence, ToolCall
 from app.repositories.investigations import InvestigationRepository
 from app.schemas.investigation import (
+    ApprovalCreate,
+    ApprovalPublic,
+    ClaimPublic,
     EvidencePublic,
+    InvestigationClaimCreate,
+    FixProposalCreate,
+    FixProposalPublic,
     InvestigationDetail,
     InvestigationPublic,
     InvestigationTimelineItem,
+    ReproductionPublic,
+    ValidationRunPublic,
 )
 from app.services.tickets import ALLOWED_TRANSITIONS
 
@@ -165,12 +185,296 @@ class InvestigationService:
             )
             for item, tool_name in rows
         ]
+        claims = await self.list_claims(organization_id, investigation_id)
+        reproductions = await self.list_reproductions(organization_id, investigation_id)
+        fix_proposals = await self.list_fix_proposals(organization_id, investigation_id)
         events = await self.investigations.list_events(organization_id, investigation_id)
         return InvestigationDetail(
             **InvestigationPublic.model_validate(investigation).model_dump(),
             evidence=evidence,
+            claims=claims,
+            reproductions=reproductions,
+            fix_proposals=fix_proposals,
             timeline=build_investigation_timeline(events, evidence),
         )
+
+    async def add_claim(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        payload: InvestigationClaimCreate,
+    ) -> ClaimPublic:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        if payload.evidence_ids:
+            evidence_rows = list(
+                (
+                    await self.db.execute(
+                        select(Evidence).where(
+                            Evidence.organization_id == organization_id,
+                            Evidence.investigation_id == investigation_id,
+                            Evidence.id.in_(payload.evidence_ids),
+                        )
+                    )
+                ).scalars().all()
+            )
+            found_ids = {row.id for row in evidence_rows}
+            missing = [item for item in payload.evidence_ids if item not in found_ids]
+            if missing:
+                raise NotFoundError("Evidence not found for claim.")
+
+        claim = await self.investigations.create_claim(
+            organization_id=organization_id,
+            investigation_id=investigation_id,
+            created_by=actor_id,
+            statement=payload.statement,
+            kind=payload.kind,
+            confidence=float(payload.confidence),
+            status=ClaimStatus.PROPOSED,
+        )
+
+        evidence_quotes = payload.evidence_quotes or {}
+        for evidence_id in payload.evidence_ids:
+            quote = evidence_quotes.get(str(evidence_id)) or evidence_quotes.get(str(evidence_id).lower())
+            if quote is None:
+                quote = "" if payload.statement else ""
+            await self.investigations.create_claim_evidence(
+                organization_id=organization_id,
+                claim_id=claim.id,
+                evidence_id=evidence_id,
+                quote=quote,
+            )
+
+        await self.db.commit()
+        return ClaimPublic.model_validate(claim)
+
+    async def list_claims(
+        self, organization_id: uuid.UUID, investigation_id: uuid.UUID
+    ) -> list[ClaimPublic]:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        claims = await self.investigations.list_claims(organization_id, investigation_id)
+        return [ClaimPublic.model_validate(claim) for claim in claims]
+
+    async def create_reproduction(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        *,
+        spec: dict[str, object],
+        status: ReproductionStatus = ReproductionStatus.QUEUED,
+    ) -> ReproductionPublic:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        reproduction = await self.investigations.create_reproduction(
+            organization_id=organization_id,
+            investigation_id=investigation_id,
+            spec=spec,
+            status=status,
+        )
+        await self.db.commit()
+        return ReproductionPublic.model_validate(reproduction)
+
+    async def list_reproductions(
+        self, organization_id: uuid.UUID, investigation_id: uuid.UUID
+    ) -> list[ReproductionPublic]:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        reproductions = await self.investigations.list_reproductions(organization_id, investigation_id)
+        return [ReproductionPublic.model_validate(reproduction) for reproduction in reproductions]
+
+    async def add_validation_run(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        *,
+        reproduction_id: uuid.UUID | None = None,
+        fix_proposal_id: uuid.UUID | None = None,
+        status: ValidationStatus | str,
+        passed: int = 0,
+        failed: int = 0,
+        skipped: int = 0,
+        repro_fixed: bool = False,
+        regression_pass: bool = False,
+        logs_ref: str | None = None,
+    ) -> ValidationRunPublic:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        if reproduction_id is not None:
+            reproduction = await self.db.get(Reproduction, reproduction_id)
+            if reproduction is None or reproduction.organization_id != organization_id:
+                raise NotFoundError("Reproduction not found.")
+            if reproduction.investigation_id != investigation_id:
+                raise ConflictError("Reproduction does not belong to the investigation.")
+
+        if fix_proposal_id is not None:
+            proposal = await self.db.get(FixProposal, fix_proposal_id)
+            if proposal is None or proposal.organization_id != organization_id:
+                raise NotFoundError("Fix proposal not found.")
+            if proposal.investigation_id != investigation_id:
+                raise ConflictError("Fix proposal does not belong to the investigation.")
+
+        if reproduction_id is None and fix_proposal_id is None:
+            raise ConflictError("A validation run must reference a reproduction or fix proposal.")
+
+        validation_status = (
+            status if isinstance(status, ValidationStatus) else ValidationStatus(status)
+        )
+
+        run = await self.investigations.create_validation_run(
+            organization_id=organization_id,
+            reproduction_id=reproduction_id,
+            fix_proposal_id=fix_proposal_id,
+            status=validation_status,
+            passed=passed,
+            failed=failed,
+            skipped=skipped,
+            repro_fixed=repro_fixed,
+            regression_pass=regression_pass,
+            logs_ref=logs_ref,
+        )
+        await self.db.commit()
+        return ValidationRunPublic.model_validate(run)
+
+    async def list_validation_runs(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        *,
+        reproduction_id: uuid.UUID | None = None,
+        fix_proposal_id: uuid.UUID | None = None,
+    ) -> list[ValidationRunPublic]:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        if reproduction_id is not None:
+            reproduction = await self.db.get(Reproduction, reproduction_id)
+            if reproduction is None or reproduction.organization_id != organization_id:
+                raise NotFoundError("Reproduction not found.")
+            if reproduction.investigation_id != investigation_id:
+                raise ConflictError("Reproduction does not belong to the investigation.")
+        if fix_proposal_id is not None:
+            proposal = await self.db.get(FixProposal, fix_proposal_id)
+            if proposal is None or proposal.organization_id != organization_id:
+                raise NotFoundError("Fix proposal not found.")
+            if proposal.investigation_id != investigation_id:
+                raise ConflictError("Fix proposal does not belong to the investigation.")
+
+        runs = await self.investigations.list_validation_runs(
+            organization_id,
+            reproduction_id=reproduction_id,
+            fix_proposal_id=fix_proposal_id,
+        )
+        return [ValidationRunPublic.model_validate(run) for run in runs]
+
+    async def create_fix_proposal(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        payload: FixProposalCreate,
+    ) -> FixProposalPublic:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+        if payload.reproduction_id is not None:
+            reproduction = await self.db.get(Reproduction, payload.reproduction_id)
+            if reproduction is None or reproduction.organization_id != organization_id:
+                raise NotFoundError("Reproduction not found.")
+            if reproduction.investigation_id != investigation_id:
+                raise ConflictError("Reproduction does not belong to the investigation.")
+
+        proposal = await self.investigations.create_fix_proposal(
+            organization_id=organization_id,
+            investigation_id=investigation_id,
+            reproduction_id=payload.reproduction_id,
+            created_by=actor_id,
+            status=FixProposalStatus.DRAFT,
+            diff=payload.diff,
+            diff_sha256=payload.diff_sha256,
+            rationale=payload.rationale,
+            risks=payload.risks,
+            files_changed=payload.files_changed,
+            tests_added=payload.tests_added,
+        )
+        await self.db.commit()
+        return FixProposalPublic.model_validate(proposal)
+
+    async def list_fix_proposals(
+        self, organization_id: uuid.UUID, investigation_id: uuid.UUID
+    ) -> list[FixProposalPublic]:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        proposals = await self.investigations.list_fix_proposals(organization_id, investigation_id)
+        approvals = await self.investigations.list_approvals(organization_id, investigation_id)
+        approvals_by_proposal: dict[uuid.UUID, list[ApprovalPublic]] = {}
+        for approval in approvals:
+            approvals_by_proposal.setdefault(approval.fix_proposal_id, []).append(
+                ApprovalPublic.model_validate(approval)
+            )
+        output: list[FixProposalPublic] = []
+        for proposal in proposals:
+            item = FixProposalPublic.model_validate(proposal)
+            item.approvals = approvals_by_proposal.get(proposal.id, [])
+            output.append(item)
+        return output
+
+    async def add_approval(
+        self,
+        organization_id: uuid.UUID,
+        investigation_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        payload: ApprovalCreate,
+    ) -> ApprovalPublic:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+
+        proposal = await self.db.get(FixProposal, payload.fix_proposal_id)
+        if proposal is None or proposal.organization_id != organization_id:
+            raise NotFoundError("Fix proposal not found.")
+        if proposal.investigation_id != investigation_id:
+            raise ConflictError("Fix proposal does not belong to the investigation.")
+
+        expected_hash = proposal.diff_sha256
+        provided_hash = payload.diff_sha256 or expected_hash
+        if expected_hash and provided_hash and expected_hash != provided_hash:
+            raise ConflictError("Approval hash does not match the proposal diff.")
+        if expected_hash is None and payload.diff_sha256 is not None:
+            raise ConflictError("Approval hash does not match the proposal diff.")
+
+        approval = await self.investigations.create_approval(
+            organization_id=organization_id,
+            fix_proposal_id=proposal.id,
+            approver_id=actor_id,
+            decision=payload.decision,
+            diff_sha256=provided_hash,
+            comment=payload.comment,
+        )
+        proposal.status = (
+            FixProposalStatus.VALIDATED
+            if payload.decision == ApprovalDecision.APPROVED
+            else FixProposalStatus.REJECTED
+        )
+        await self.db.commit()
+        await self.db.refresh(approval)
+        return ApprovalPublic.model_validate(approval)
+
+    async def list_approvals(
+        self, organization_id: uuid.UUID, investigation_id: uuid.UUID
+    ) -> list[ApprovalPublic]:
+        if await self.investigations.get(organization_id, investigation_id) is None:
+            raise NotFoundError("Investigation not found.")
+        approvals = await self.investigations.list_approvals(organization_id, investigation_id)
+        return [ApprovalPublic.model_validate(approval) for approval in approvals]
 
     async def list_events(
         self, organization_id: uuid.UUID, investigation_id: uuid.UUID

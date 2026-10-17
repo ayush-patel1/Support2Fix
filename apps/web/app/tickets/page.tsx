@@ -220,7 +220,12 @@ function NewTicketForm({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (repositories.length === 1) setRepositoryId(repositories[0].id);
+    if (repositories.length === 1) {
+      const [firstRepository] = repositories;
+      if (firstRepository) {
+        setRepositoryId(firstRepository.id);
+      }
+    }
   }, [repositories]);
 
   async function handleSubmit(e: React.FormEvent) {
